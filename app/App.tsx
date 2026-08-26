@@ -1,14 +1,30 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Maximize2, Minimize2, Home, Sparkles, BookMarked, BookOpen, ArrowLeft, ChevronDown, Settings2, X, Info } from "lucide-react";
+import {
+  Maximize2,
+  Minimize2,
+  Home,
+  Sparkles,
+  BookMarked,
+  BookOpen,
+  ArrowLeft,
+  ChevronDown,
+  Settings2,
+  X,
+  Info,
+  Plus,
+  Trash2,
+  Loader2,
+  Check,
+} from "lucide-react";
 import SearchBox from "./components/SearchBox.tsx";
 import WordChips from "./components/WordChips.tsx";
 import ResultCard from "./components/ResultCard.tsx";
 import ResourceLinks from "./components/ResourceLinks.tsx";
 import UsageGuide from "./components/UsageGuide.tsx";
-import { fetchEasySenses, fetchPopular, fetchRelated, lookupWord } from "./lib/api.ts";
+import { fetchEasySenses, fetchPopular, fetchRelated, fetchTopicWords, lookupWord } from "./lib/api.ts";
 import { relatedWords, WORD_SETS, type WordSet } from "./lib/words.ts";
 import * as store from "./lib/storage.ts";
-import type { DictSense, LookupResult, ReadingLevel } from "./types.ts";
+import type { CustomWordSet, DictSense, LookupResult, ReadingLevel } from "./types.ts";
 
 const LANDING_PREVIEW_MAX = 5; // 랜딩 4열 각각 최대 개수(D23)
 const DEFAULT_TOPICS = ["nature-season", "school-life", "feelings-emotions"]; // 낱말 익히기 기본 노출 주제 3개
@@ -43,6 +59,7 @@ export default function App() {
   const [favorites, setFavorites] = useState<string[]>([]);
   const [popular, setPopular] = useState<string[]>([]); // 전역(다른 사용자, 최근 30일) — 랜딩용
   const [myPopular, setMyPopular] = useState<string[]>([]); // 개인(전체기간) — 나의 낱말사전용, D26
+  const [customWordSets, setCustomWordSets] = useState<CustomWordSet[]>([]); // 사용자 정의 관심 주제 (PLAN.md §13)
   const [big, setBig] = useState(false);
   const [level, setLevel] = useState<ReadingLevel>("dict");
   const [simplifying, setSimplifying] = useState(false);
@@ -58,6 +75,18 @@ export default function App() {
     clearTimeout(toastTimer.current);
     toastTimer.current = setTimeout(() => setToast(null), 1500);
   }, []);
+
+  const handleAddCustomSet = useCallback((newSet: CustomWordSet) => {
+    const updated = store.saveCustomWordSet(newSet);
+    setCustomWordSets(updated);
+    showToast(`'${newSet.title}' 주제가 추가되었어요!`);
+  }, [showToast]);
+
+  const handleDeleteCustomSet = useCallback((id: string) => {
+    const updated = store.deleteCustomWordSet(id);
+    setCustomWordSets(updated);
+    showToast("주제가 삭제되었어요.");
+  }, [showToast]);
 
   const search = useCallback(async (w: string, opts: { pushUrl?: boolean } = {}) => {
     const q = w.trim();
@@ -112,6 +141,7 @@ export default function App() {
     setRecent(store.getRecent());
     setFavorites(store.getFavorites());
     setMyPopular(store.getMostSearched());
+    setCustomWordSets(store.getCustomWordSets());
     const s = store.getSettings();
     setBig(s.bigMode ?? false);
     setLevel(s.level ?? "dict");
@@ -199,7 +229,7 @@ export default function App() {
   }, []);
 
   const showingResult = result !== null || loading;
-  const related = word && result?.status === "ok" ? relatedWords(word) : null;
+  const related = word && result?.status === "ok" ? relatedWords(word, 10, customWordSets) : null;
 
   return (
     <div className="min-h-screen">
@@ -354,6 +384,9 @@ export default function App() {
           recent={recent}
           myPopular={myPopular}
           favorites={favorites}
+          customWordSets={customWordSets}
+          onAddCustomSet={handleAddCustomSet}
+          onDeleteCustomSet={handleDeleteCustomSet}
           tab={myWordsTab}
           onTabChange={setMyWordsTab}
           onClearRecent={() => setRecent(store.clearRecent())}
@@ -467,12 +500,15 @@ function HomeView({
   );
 }
 
-// "나의 낱말사전" — 좌: 나의 활동(탭 + 배지 목록), 우: 낱말 익히기(주제 카드 펼치기). D26.
+// "나의 낱말사전" — 좌: 나의 활동(탭 + 배지 목록), 우: 낱말 익히기(주제 카드 펼치기). D26, PLAN.md §13.
 function MyWordsPage({
   onSearch,
   recent,
   myPopular,
   favorites,
+  customWordSets,
+  onAddCustomSet,
+  onDeleteCustomSet,
   tab,
   onTabChange,
   onClearRecent,
@@ -482,12 +518,16 @@ function MyWordsPage({
   recent: string[];
   myPopular: string[];
   favorites: string[];
+  customWordSets: CustomWordSet[];
+  onAddCustomSet: (set: CustomWordSet) => void;
+  onDeleteCustomSet: (id: string) => void;
   tab: MyWordsTab;
   onTabChange: (t: MyWordsTab) => void;
   onClearRecent: () => void;
   onBack: () => void;
 }) {
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [createOpen, setCreateOpen] = useState(false);
   const [interestedTopics, setInterestedTopics] = useState<string[]>(DEFAULT_TOPICS);
 
   useEffect(() => {
@@ -504,13 +544,26 @@ function MyWordsPage({
     });
   };
 
+  const handleCreated = (newSet: CustomWordSet) => {
+    onAddCustomSet(newSet);
+    // 새로 만든 주제는 자동으로 관심 주제에 추가
+    setInterestedTopics((cur) => {
+      const next = cur.includes(newSet.id) ? cur : [newSet.id, ...cur];
+      store.setSettings({ interestedTopics: next });
+      return next;
+    });
+    setCreateOpen(false);
+  };
+
   const listFor: Record<MyWordsTab, { words: string[]; empty: string }> = {
     recent: { words: recent, empty: "아직 찾아본 낱말이 없어요." },
     myPopular: { words: myPopular, empty: "낱말을 찾아볼수록 여기에 순위가 쌓여요." },
     favorite: { words: favorites, empty: "별표(★)를 누르면 여기에 모여요." },
   };
   const current = listFor[tab];
-  const visibleTopics = WORD_SETS.filter((s) => interestedTopics.includes(s.id));
+
+  const allTopics: WordSet[] = [...customWordSets, ...WORD_SETS];
+  const visibleTopics = allTopics.filter((s) => interestedTopics.includes(s.id));
 
   return (
     <main className="mx-auto max-w-5xl px-4 py-8">
@@ -558,29 +611,47 @@ function MyWordsPage({
         <section>
           <div className="mb-3 flex items-center justify-between">
             <h2 className="text-lg font-extrabold text-ink-soft">낱말 익히기</h2>
-            <button
-              onClick={() => setSettingsOpen(true)}
-              className="flex items-center gap-1.5 rounded-full border border-line bg-white px-3 py-1.5 text-sm font-semibold text-ink-soft hover:bg-paper"
-            >
-              <Settings2 className="size-4" aria-hidden /> 관심 주제 ({visibleTopics.length})
-            </button>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => setCreateOpen(true)}
+                className="flex items-center gap-1 rounded-full bg-brand-50 border border-brand-200 px-3 py-1.5 text-sm font-bold text-brand-700 hover:bg-brand-100 transition-colors"
+              >
+                <Plus className="size-4" aria-hidden /> 새 주제
+              </button>
+              <button
+                onClick={() => setSettingsOpen(true)}
+                className="flex items-center gap-1.5 rounded-full border border-line bg-white px-3 py-1.5 text-sm font-semibold text-ink-soft hover:bg-paper transition-colors"
+              >
+                <Settings2 className="size-4" aria-hidden /> 관심 주제 ({visibleTopics.length})
+              </button>
+            </div>
           </div>
           <div className="space-y-3">
-            {visibleTopics.map((set) => (
-              <TopicCard key={set.id} set={set} onPick={onSearch} />
-            ))}
+            {visibleTopics.map((set) => {
+              const isCustom = customWordSets.some((c) => c.id === set.id);
+              return (
+                <TopicCard
+                  key={set.id}
+                  set={set}
+                  onPick={onSearch}
+                  isCustom={isCustom}
+                  onDelete={isCustom ? () => onDeleteCustomSet(set.id) : undefined}
+                />
+              );
+            })}
             {visibleTopics.length === 0 ? <p className="text-sm text-ink-faint">관심 주제를 선택해 주세요.</p> : null}
           </div>
         </section>
       </div>
 
+      {/* 관심 주제 선택 모달 */}
       {settingsOpen ? (
         <div
           className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4"
           onClick={() => setSettingsOpen(false)}
         >
-          <div className="w-full max-w-md rounded-2xl bg-white p-5 shadow-xl" onClick={(e) => e.stopPropagation()}>
-            <div className="mb-3 flex items-center justify-between">
+          <div className="w-full max-w-lg rounded-2xl bg-white p-5 shadow-xl max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
+            <div className="mb-4 flex items-center justify-between">
               <div>
                 <h2 className="text-base font-extrabold text-ink">관심 주제 선택</h2>
                 <p className="mt-0.5 text-xs text-ink-faint">화면에 표시할 주제 카드를 골라보세요.</p>
@@ -589,7 +660,65 @@ function MyWordsPage({
                 <X className="size-5" aria-hidden />
               </button>
             </div>
-            <div className="mt-4">
+
+            {/* 새 주제 만들기 바로가기 배너 */}
+            <div className="mb-5 flex items-center justify-between rounded-xl bg-brand-50 p-3 border border-brand-200">
+              <span className="text-sm font-medium text-brand-900">찾고 싶은 주제가 없나요?</span>
+              <button
+                onClick={() => {
+                  setSettingsOpen(false);
+                  setCreateOpen(true);
+                }}
+                className="flex items-center gap-1 rounded-lg bg-brand-600 px-3 py-1.5 text-xs font-bold text-white hover:bg-brand-700 transition-colors"
+              >
+                <Plus className="size-3.5" aria-hidden /> AI로 새 주제 만들기
+              </button>
+            </div>
+
+            {/* 사용자 추가 주제 섹션 (있을 때만 노출) */}
+            {customWordSets.length > 0 ? (
+              <div className="mb-4">
+                <h3 className="mb-2 text-xs font-bold text-ink-soft">내가 만든 주제</h3>
+                <div className="flex flex-wrap gap-2">
+                  {customWordSets.map((set) => {
+                    const active = interestedTopics.includes(set.id);
+                    return (
+                      <div key={set.id} className="relative inline-flex items-center">
+                        <button
+                          onClick={() => toggleTopic(set.id)}
+                          aria-pressed={active}
+                          className={`flex items-center gap-1.5 rounded-full border py-2 pl-3.5 pr-8 text-sm font-semibold transition-colors ${
+                            active
+                              ? "border-brand-500 bg-brand-50 text-brand-700 font-bold"
+                              : "border-line bg-white text-ink-soft hover:border-brand-200"
+                          }`}
+                        >
+                          <span>{set.emoji}</span>
+                          <span>{set.title}</span>
+                          {active ? <Check className="size-3.5" /> : null}
+                        </button>
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            if (window.confirm(`'${set.title}' 주제를 삭제할까요?`)) {
+                              onDeleteCustomSet(set.id);
+                            }
+                          }}
+                          className="absolute right-2 p-1 text-ink-faint hover:text-red-600 transition-colors"
+                          title="주제 삭제"
+                        >
+                          <Trash2 className="size-3.5" />
+                        </button>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            ) : null}
+
+            {/* 기본 큐레이션 주제 섹션 */}
+            <div>
+              <h3 className="mb-2 text-xs font-bold text-ink-soft">기본 주제</h3>
               <div className="flex flex-wrap gap-2">
                 {WORD_SETS.map((set) => {
                   const active = interestedTopics.includes(set.id);
@@ -611,26 +740,285 @@ function MyWordsPage({
           </div>
         </div>
       ) : null}
+
+      {/* 새 주제 만들기 모달 */}
+      <CreateTopicModal open={createOpen} onClose={() => setCreateOpen(false)} onCreated={handleCreated} />
     </main>
   );
 }
 
+// 새 관심 주제 만들기 모달 (PLAN.md §13)
+function CreateTopicModal({
+  open,
+  onClose,
+  onCreated,
+}: {
+  open: boolean;
+  onClose: () => void;
+  onCreated: (set: CustomWordSet) => void;
+}) {
+  const [topicInput, setTopicInput] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [errorMsg, setErrorMsg] = useState<string | null>(null);
+
+  const [generatedEmoji, setGeneratedEmoji] = useState("💡");
+  const [words, setWords] = useState<string[]>([]);
+  const [manualWord, setManualWord] = useState("");
+
+  if (!open) return null;
+
+  const handleGenerate = async (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
+    const t = topicInput.trim();
+    if (!t) {
+      setErrorMsg("주제명을 입력해주세요.");
+      return;
+    }
+    setErrorMsg(null);
+    setLoading(true);
+
+    const res = await fetchTopicWords(t);
+    setLoading(false);
+
+    if (res.status === "ok" && res.words.length > 0) {
+      setWords(res.words);
+      if (res.emoji) setGeneratedEmoji(res.emoji);
+    } else {
+      setErrorMsg(res.message || "주제에 맞는 낱말을 찾지 못했어요.");
+    }
+  };
+
+  const handleRemoveWord = (w: string) => {
+    setWords((cur) => cur.filter((item) => item !== w));
+  };
+
+  const handleAddManualWord = (e: React.FormEvent) => {
+    e.preventDefault();
+    const w = manualWord.trim();
+    if (!w) return;
+    if (!words.includes(w)) {
+      setWords((cur) => [...cur, w]);
+    }
+    setManualWord("");
+  };
+
+  const handleSave = () => {
+    const t = topicInput.trim();
+    if (!t) {
+      setErrorMsg("주제명을 입력해주세요.");
+      return;
+    }
+    if (words.length === 0) {
+      setErrorMsg("낱말이 1개 이상 필요해요. AI로 찾거나 직접 추가해주세요.");
+      return;
+    }
+
+    const newSet: CustomWordSet = {
+      id: `custom_${Date.now()}`,
+      title: t,
+      emoji: generatedEmoji,
+      words,
+      createdAt: new Date().toISOString(),
+    };
+
+    onCreated(newSet);
+  };
+
+  const PRESET_EMOJIS = ["🚀", "🦖", "⛺", "🎨", "🔬", "🏰", "🌊", "🎸", "🧁", "⚽", "💡", "🌈"];
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={onClose}>
+      <div className="w-full max-w-lg rounded-2xl bg-white p-6 shadow-xl max-h-[92vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
+        <div className="mb-4 flex items-center justify-between">
+          <div>
+            <h2 className="text-lg font-extrabold text-ink">새 관심 주제 만들기</h2>
+            <p className="mt-0.5 text-xs text-ink-faint">관심 있는 주제를 입력하면 AI가 초등 눈높이 낱말을 찾아줘요.</p>
+          </div>
+          <button onClick={onClose} aria-label="닫기" className="text-ink-faint hover:text-ink">
+            <X className="size-5" aria-hidden />
+          </button>
+        </div>
+
+        {/* 주제 입력 및 AI 생성 폼 */}
+        <form onSubmit={handleGenerate} className="space-y-4">
+          <div>
+            <label htmlFor="topic-input" className="block text-xs font-bold text-ink-soft mb-1.5">
+              어떤 주제를 배울까요?
+            </label>
+            <div className="flex gap-2">
+              <input
+                id="topic-input"
+                type="text"
+                value={topicInput}
+                onChange={(e) => {
+                  setTopicInput(e.target.value);
+                  setErrorMsg(null);
+                }}
+                placeholder="예: 우주와 별, 전래동화, 공룡 시대"
+                maxLength={20}
+                className="flex-1 rounded-xl border border-line px-3.5 py-2.5 text-sm font-medium text-ink placeholder:text-ink-faint focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-100"
+                disabled={loading}
+              />
+              <button
+                type="submit"
+                disabled={loading || !topicInput.trim()}
+                className="flex items-center gap-1.5 rounded-xl bg-brand-600 px-4 py-2.5 text-sm font-bold text-white hover:bg-brand-700 disabled:opacity-50 transition-colors shrink-0"
+              >
+                {loading ? <Loader2 className="size-4 animate-spin" /> : <Sparkles className="size-4" />}
+                <span>AI로 낱말 찾기</span>
+              </button>
+            </div>
+          </div>
+        </form>
+
+        {errorMsg ? <p className="mt-2 text-xs font-semibold text-red-600">{errorMsg}</p> : null}
+
+        {loading ? (
+          <div className="my-8 flex flex-col items-center justify-center py-6 text-center">
+            <Loader2 className="size-8 animate-spin text-brand-600 mb-3" />
+            <p className="text-sm font-bold text-ink">초등 눈높이에 맞는 낱말을 사전에서 찾는 중...</p>
+            <p className="text-xs text-ink-faint mt-1">한국어기초사전에 등록된 정확한 낱말만 골라내고 있어요.</p>
+          </div>
+        ) : null}
+
+        {/* 생성된 낱말 목록 및 편집 영역 */}
+        {words.length > 0 && !loading ? (
+          <div className="mt-6 space-y-4 border-t border-line pt-4">
+            <div>
+              <label className="block text-xs font-bold text-ink-soft mb-1.5">대표 이모지</label>
+              <div className="flex flex-wrap items-center gap-1.5">
+                {PRESET_EMOJIS.map((em) => (
+                  <button
+                    key={em}
+                    type="button"
+                    onClick={() => setGeneratedEmoji(em)}
+                    className={`size-8 rounded-lg text-lg flex items-center justify-center border transition-transform ${
+                      generatedEmoji === em ? "border-brand-500 bg-brand-50 scale-110 shadow-sm" : "border-line hover:bg-paper"
+                    }`}
+                  >
+                    {em}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <div>
+              <div className="mb-2 flex items-center justify-between">
+                <label className="text-xs font-bold text-ink-soft">포함할 낱말 ({words.length}개)</label>
+                <span className="text-xs text-ink-faint">X를 눌러 제외할 수 있어요</span>
+              </div>
+              <div className="flex flex-wrap gap-2 max-h-40 overflow-y-auto p-1 bg-paper rounded-xl border border-line">
+                {words.map((w) => (
+                  <span
+                    key={w}
+                    className="inline-flex items-center gap-1 rounded-full bg-white border border-line px-3 py-1.5 text-sm font-semibold text-ink shadow-xs"
+                  >
+                    <span>{w}</span>
+                    <button
+                      type="button"
+                      onClick={() => handleRemoveWord(w)}
+                      className="text-ink-faint hover:text-red-500 transition-colors"
+                      title="낱말 빼기"
+                    >
+                      <X className="size-3.5" />
+                    </button>
+                  </span>
+                ))}
+              </div>
+            </div>
+
+            {/* 직접 낱말 추가 인풋 */}
+            <form onSubmit={handleAddManualWord} className="flex gap-2">
+              <input
+                type="text"
+                value={manualWord}
+                onChange={(e) => setManualWord(e.target.value)}
+                placeholder="직접 낱말 추가하기"
+                maxLength={10}
+                className="flex-1 rounded-xl border border-line px-3 py-2 text-xs font-medium text-ink placeholder:text-ink-faint focus:border-brand-500 focus:outline-none"
+              />
+              <button
+                type="submit"
+                disabled={!manualWord.trim()}
+                className="rounded-xl border border-line bg-paper px-3 py-2 text-xs font-bold text-ink-soft hover:bg-white disabled:opacity-50 transition-colors"
+              >
+                + 추가
+              </button>
+            </form>
+
+            <div className="pt-3 border-t border-line flex justify-end gap-2">
+              <button
+                type="button"
+                onClick={onClose}
+                className="rounded-xl border border-line px-4 py-2.5 text-sm font-semibold text-ink-soft hover:bg-paper transition-colors"
+              >
+                취소
+              </button>
+              <button
+                type="button"
+                onClick={handleSave}
+                className="rounded-xl bg-brand-600 px-5 py-2.5 text-sm font-bold text-white hover:bg-brand-700 shadow-sm transition-colors"
+              >
+                주제 저장하기
+              </button>
+            </div>
+          </div>
+        ) : null}
+      </div>
+    </div>
+  );
+}
+
 // 주제 카드 — 누르면 펼쳐져서 그 주제의 낱말을 전부 보여준다("주제를 누르면 더 확장해 찾기").
-function TopicCard({ set, onPick }: { set: WordSet; onPick: (w: string) => void }) {
+function TopicCard({
+  set,
+  onPick,
+  isCustom,
+  onDelete,
+}: {
+  set: WordSet;
+  onPick: (w: string) => void;
+  isCustom?: boolean;
+  onDelete?: () => void;
+}) {
   const [open, setOpen] = useState(false);
   const preview = set.words.slice(0, 6);
   const shown = open ? set.words : preview;
   return (
     <div className="rounded-2xl border border-line bg-white p-4">
-      <button onClick={() => setOpen((o) => !o)} className="flex w-full items-center justify-between text-left">
-        <span className="flex items-center gap-2 text-lg font-extrabold text-ink">
-          <span>{set.emoji}</span> {set.title}
-        </span>
-        <span className="flex items-center gap-1 text-sm text-ink-faint">
-          {open ? "접기" : `낱말 ${set.words.length}개`}
-          <ChevronDown className={`size-4 transition-transform ${open ? "rotate-180" : ""}`} aria-hidden />
-        </span>
-      </button>
+      <div className="flex w-full items-center justify-between">
+        <button onClick={() => setOpen((o) => !o)} className="flex flex-1 items-center gap-2 text-left">
+          <span className="text-xl">{set.emoji}</span>
+          <span className="text-lg font-extrabold text-ink">{set.title}</span>
+          {isCustom ? (
+            <span className="rounded-md bg-brand-50 px-2 py-0.5 text-xs font-bold text-brand-700 border border-brand-200">
+              직접 만듦
+            </span>
+          ) : null}
+        </button>
+        <div className="flex items-center gap-2">
+          {isCustom && onDelete ? (
+            <button
+              onClick={() => {
+                if (window.confirm(`'${set.title}' 주제를 삭제할까요?`)) {
+                  onDelete();
+                }
+              }}
+              className="p-1.5 text-ink-faint hover:text-red-600 transition-colors"
+              title="주제 삭제"
+            >
+              <Trash2 className="size-4" />
+            </button>
+          ) : null}
+          <button
+            onClick={() => setOpen((o) => !o)}
+            className="flex items-center gap-1 text-sm text-ink-faint hover:text-ink-soft transition-colors"
+          >
+            <span>{open ? "접기" : `낱말 ${set.words.length}개`}</span>
+            <ChevronDown className={`size-4 transition-transform ${open ? "rotate-180" : ""}`} aria-hidden />
+          </button>
+        </div>
+      </div>
       <div className="mt-3 flex flex-wrap gap-2">
         {shown.map((w) => (
           <button

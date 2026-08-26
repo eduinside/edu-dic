@@ -1,8 +1,11 @@
+import type { CustomWordSet } from "../types.ts";
+
 // 개인 데이터는 로그인 없이 기기 localStorage 에만 저장한다(계획서 D6).
 const K_RECENT = "edudic.recent";
 const K_FAV = "edudic.favorites";
 const K_SETTINGS = "edudic.settings";
 const K_COUNTS = "edudic.searchCounts"; // "내가 자주 찾은 낱말"(전체기간, D23) 집계용
+const K_CUSTOM_TOPICS = "edudic.customTopics"; // 사용자 추가 관심 주제 (PLAN.md §13)
 const RECENT_MAX = 12;
 
 function read(key: string): string[] {
@@ -115,4 +118,45 @@ export function setSettings(patch: Settings) {
   } catch {
     /* noop */
   }
+}
+
+// 사용자(교사) 지정 관심 주제 관리
+export function getCustomWordSets(): CustomWordSet[] {
+  try {
+    const raw = localStorage.getItem(K_CUSTOM_TOPICS);
+    if (!raw) return [];
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) ? (parsed as CustomWordSet[]) : [];
+  } catch {
+    return [];
+  }
+}
+
+export function saveCustomWordSet(set: CustomWordSet): CustomWordSet[] {
+  const cur = getCustomWordSets();
+  const next = [set, ...cur.filter((s) => s.id !== set.id)];
+  try {
+    localStorage.setItem(K_CUSTOM_TOPICS, JSON.stringify(next));
+  } catch {
+    /* noop */
+  }
+  return next;
+}
+
+export function deleteCustomWordSet(id: string): CustomWordSet[] {
+  const cur = getCustomWordSets();
+  const next = cur.filter((s) => s.id !== id);
+  try {
+    localStorage.setItem(K_CUSTOM_TOPICS, JSON.stringify(next));
+  } catch {
+    /* noop */
+  }
+  // interestedTopics에서도 제거
+  const settings = getSettings();
+  if (settings.interestedTopics) {
+    setSettings({
+      interestedTopics: settings.interestedTopics.filter((t) => t !== id),
+    });
+  }
+  return next;
 }

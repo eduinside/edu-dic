@@ -52,3 +52,12 @@ export type LookupResult =
 
 // 상단 난이도 토글(D17-2). 기본값은 항상 "dict"(사전 원문 — AI 개입 없음, 가장 안전).
 export type ReadingLevel = "dict" | "easy";
+
+// 사용자(교사) 정의 관심 주제 세트 (PLAN.md §13)
+export interface CustomWordSet {
+  id: string;
+  title: string;
+  emoji: string;
+  words: string[];
+  createdAt: string;
+}

@@ -170,8 +170,13 @@ export function recommendedWords(): string[] {
 }
 
 // 검색 결과 아래 "같은 카테고리 낱말 더 보기"용 — 낱말이 속한 세트를 찾아 형제 낱말을 반환.
-export function relatedWords(word: string, limit = 10): { title: string; emoji: string; words: string[] } | null {
-  const set = WORD_SETS.find((s) => s.words.includes(word));
+export function relatedWords(
+  word: string,
+  limit = 10,
+  customSets: WordSet[] = [],
+): { title: string; emoji: string; words: string[] } | null {
+  const allSets = [...customSets, ...WORD_SETS];
+  const set = allSets.find((s) => s.words.includes(word));
   if (!set) return null;
   const siblings = set.words.filter((w) => w !== word).slice(0, limit);
   if (siblings.length === 0) return null;

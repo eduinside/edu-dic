@@ -23,4 +23,15 @@
 - 컴포넌트: `SearchBox`, `ResultCard`, `WordChips`, `Modal`, `UsageGuide`, `ResourceLinks`
 - localStorage 기반 최근 검색/즐겨찾기 (`app/lib/storage.ts`)
 
-**다음 단계**: M2(자주 찾는 낱말 D1 집계 고도화, 낱말 배우기 코너 확장, 기초어휘 시드 워밍) — [PLAN.md §8](PLAN.md), §13 향후 로드맵 참고.
+## 2026-08-26 — M2 완료 및 사용자 관심 주제 AI 낱말 생성 추가
+
+M2(자주 찾는 낱말 D1 집계 고도화, 11개 낱말 배우기 코너 확장) 및 PLAN.md §13 향후 로드맵(사용자 관심 주제 추가 + AI 낱말 추천 & krdict 사전 접지 검증) 구현 완료.
+
+**M2 + 로드맵 주요 구현 내용**
+- `functions/api/popular.ts` & D1 `edudic_popular_daily`: 최근 30일 일일 버킷 기반 전역 인기 낱말 집계
+- `app/lib/words.ts`: 초등 11개 주제별 어휘 세트 구축 (자연·학교·감정·음식·동물·탈것·몸·옷·동네·놀이 등)
+- `functions/api/topic-words.ts` [NEW]: 사용자 입력 주제에 대한 AI(Timely/Gemini) 낱말 생성 및 krdict `searchWord` 사전 접지(Grounding) 실존 검증
+- `app/lib/storage.ts`: `edudic.customTopics` 기반 커스텀 주제 CRUD 지원 (로그인 없는 D6 원칙)
+- UI: `/my` 나의 낱말사전 내 `[+ 새 주제]` 생성 모달, AI 낱말 생성 및 수동 추가/삭제, 이모지 선택, 카드 아코디언 및 삭제 기능 연동
+
+**다음 단계**: M3(접근성 및 오프라인/에러 UX 다듬기, 도메인 연결) — [PLAN.md §8](PLAN.md) 참고.

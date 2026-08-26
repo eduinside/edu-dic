@@ -61,3 +61,25 @@ export async function fetchPopular(): Promise<string[]> {
     return [];
   }
 }
+
+// 사용자 지정 관심 주제의 낱말 추천 및 krdict 검증(PLAN.md §13)
+export async function fetchTopicWords(
+  topic: string,
+): Promise<{ status: "ok" | "blocked" | "not_found" | "error"; emoji?: string; words: string[]; message?: string }> {
+  const t = topic.trim();
+  if (!t) return { status: "error", words: [], message: "주제를 입력해주세요." };
+  try {
+    const res = await fetch(`/api/topic-words?topic=${encodeURIComponent(t)}`, {
+      headers: { accept: "application/json" },
+    });
+    const data = (await res.json()) as {
+      status: "ok" | "blocked" | "not_found" | "error";
+      emoji?: string;
+      words: string[];
+      message?: string;
+    };
+    return data;
+  } catch {
+    return { status: "error", words: [], message: "연결 중 문제가 생겼어요. 잠시 후 다시 시도해주세요." };
+  }
+}

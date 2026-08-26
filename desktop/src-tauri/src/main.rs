@@ -14,7 +14,8 @@ use tauri_plugin_opener::OpenerExt;
 
 const TRAY_ID: &str = "edu-dic-tray";
 const WEB_URL: &str = "https://dic.dgedu.link";
-const DEFAULT_SHORTCUT: &str = "Ctrl+Shift+D";
+const DEFAULT_SHORTCUT: &str = "Ctrl+Alt+D";
+
 
 struct AppState {
     always_on_top: Mutex<bool>,
@@ -25,12 +26,13 @@ fn resize_window(window: WebviewWindow, height: u32) -> Result<(), String> {
     let current_size = window.outer_size().map_err(|e| e.to_string())?;
     window
         .set_size(Size::Physical(PhysicalSize {
-            width: current_size.width.max(600),
+            width: current_size.width.max(640),
             height,
         }))
         .map_err(|e| e.to_string())?;
     Ok(())
 }
+
 
 
 #[tauri::command]
@@ -77,9 +79,10 @@ fn main() {
             }
 
             // 시스템 트레이 메뉴 구성
-            let item_show = MenuItem::with_id(app, "show", "사전 열기 (Ctrl+Shift+D)", true, None::<&str>)?;
+            let item_show = MenuItem::with_id(app, "show", "사전 열기 (Ctrl+Alt+D)", true, None::<&str>)?;
             let item_web = MenuItem::with_id(app, "web", "웹 사전 열기 (dic.dgedu.link)", true, None::<&str>)?;
             let item_quit = MenuItem::with_id(app, "quit", "종료", true, None::<&str>)?;
+
             let tray_menu = Menu::with_items(app, &[&item_show, &item_web, &item_quit])?;
 
             TrayIconBuilder::with_id(TRAY_ID)

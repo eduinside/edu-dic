@@ -1,49 +1,85 @@
 import { useEffect, useRef, useState } from "react";
-import { Search, Sparkles, X, Minus, ExternalLink } from "lucide-react";
+import {
+  Search,
+  Sparkles,
+  X,
+  ExternalLink,
+  Minus,
+  ArrowLeft,
+  Volume2,
+  BookOpen,
+  Loader2,
+} from "lucide-react";
 import { invoke } from "@tauri-apps/api/core";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { openUrl } from "@tauri-apps/plugin-opener";
-import { fetchSuggestions } from "./lib/api.ts";
+import {
+  fetchEasySenses,
+  fetchSuggestions,
+  lookupWord,
+  type DictHomograph,
+  type DictSense,
+  type LookupResult,
+} from "./lib/api.ts";
 import { checkForAppUpdates } from "./lib/updates.ts";
 
 export default function App() {
   const [query, setQuery] = useState("");
   const [suggestions, setSuggestions] = useState<string[]>([]);
   const [selectedIndex, setSelectedIndex] = useState(-1);
+  const [result, setResult] = useState<LookupResult | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [toast, setToast] = useState<string | null>(null);
+  const [level, setLevel] = useState<"dict" | "easy">("dict");
+  const [homoIndex, setHomoIndex] = useState(0);
+  const [simplifying, setSimplifying] = useState(false);
 
   const inputRef = useRef<HTMLInputElement>(null);
   const debounceTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  const toastTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
 
-  // 자동완성 목록 유무에 따른 스팟라이트 창 크기 동적 조절 (단일 바 68px <-> 자동완성 확장 280px)
+  const showToast = (msg: string) => {
+    setToast(msg);
+    clearTimeout(toastTimer.current);
+    toastTimer.current = setTimeout(() => setToast(null), 2500);
+  };
+
+  // 창 높이 동적 조절 (검색바 80px <-> 자동완성 340px <-> 결과 화면 580px)
   useEffect(() => {
-    let targetHeight = 68;
-    if (suggestions.length > 0) {
-      targetHeight = Math.min(68 + suggestions.length * 44 + 20, 360);
+    let targetHeight = 80;
+    if (result && result.status === "ok") {
+      targetHeight = 580;
+    } else if (suggestions.length > 0) {
+      targetHeight = Math.min(80 + suggestions.length * 44 + 30, 360);
     }
     invoke("resize_window", { height: targetHeight }).catch(() => {});
-  }, [suggestions]);
+  }, [result, suggestions]);
 
   // 시작 시 업데이트 체크 및 자동 포커스
   useEffect(() => {
     checkForAppUpdates();
     inputRef.current?.focus();
 
-    // 창이 다시 표시될 때 자동 포커스 및 검색창 초기화
     const unlisten = getCurrentWindow().listen("tauri://focus", () => {
-      inputRef.current?.focus();
-      inputRef.current?.select();
+      if (!result) {
+        inputRef.current?.focus();
+        inputRef.current?.select();
+      }
     });
 
     return () => {
       unlisten.then((f) => f());
     };
-  }, []);
+  }, [result]);
 
-  // ESC 키로 닫기/숨기기
+  // ESC 키로 뒤로가기 또는 닫기
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === "Escape") {
-        if (suggestions.length > 0) {
+        if (result) {
+          setResult(null);
+          inputRef.current?.focus();
+        } else if (suggestions.length > 0) {
           setSuggestions([]);
         } else {
           getCurrentWindow().hide();
@@ -52,13 +88,13 @@ export default function App() {
     };
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [suggestions]);
+  }, [result, suggestions]);
 
-  // 디바운스된 실시간 초성/단어 자동완성
+  // 실시간 초성/단어 자동완성 (결과 화면이 아닐 때만)
   useEffect(() => {
     clearTimeout(debounceTimer.current);
     const trimmed = query.trim();
-    if (!trimmed) {
+    if (!trimmed || result) {
       setSuggestions([]);
       setSelectedIndex(-1);
       return;
@@ -71,21 +107,71 @@ export default function App() {
     }, 100);
 
     return () => clearTimeout(debounceTimer.current);
-  }, [query]);
+  }, [query, result]);
 
-  // 낱말 검색 시: 웹 사전에서 크게 뜻풀이·예문·사진이 나오도록 브라우저 열기 후 스팟라이트 창 닫기
+  // "쉬운 말로" 모드 전환 시 비동기 변환
+  useEffect(() => {
+    if (level !== "easy" || result?.status !== "ok") return;
+    const entry = result.entry;
+    const homographs = entry.homographs && entry.homographs.length > 1 ? entry.homographs : null;
+    const already = homographs ? homographs[homoIndex]?.easySenses : entry.easySenses;
+    if (already) return;
+
+    let cancelled = false;
+    const w = entry.word;
+    const idx = homoIndex;
+    setSimplifying(true);
+    fetchEasySenses(w, idx).then((easySenses) => {
+      if (cancelled) return;
+      setSimplifying(false);
+      if (!easySenses) return;
+      setResult((prev) => {
+        if (prev?.status !== "ok" || prev.entry.word !== w) return prev;
+        const nextEntry = { ...prev.entry };
+        if (nextEntry.homographs && nextEntry.homographs.length > 1) {
+          const hgs = [...nextEntry.homographs];
+          hgs[idx] = { ...hgs[idx], easySenses };
+          nextEntry.homographs = hgs;
+          if (idx === 0) nextEntry.easySenses = easySenses;
+        } else {
+          nextEntry.easySenses = easySenses;
+        }
+        return { ...prev, entry: nextEntry };
+      });
+    });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [level, result, homoIndex]);
+
+  // 낱말 검색: 성공 시 별도 화면으로 전환, 실패 시 토스트 표시
   async function submitSearch(wordToSearch: string) {
     const w = wordToSearch.trim();
     if (!w) return;
 
-    // 브라우저로 큰 화면 결과 즉시 열기
-    await openUrl(`https://dic.dgedu.link/${encodeURIComponent(w)}`).catch(() => {});
-
-    // 스팟라이트 바 상태 정리 및 백그라운드 숨김
-    setQuery("");
     setSuggestions([]);
-    setSelectedIndex(-1);
-    await getCurrentWindow().hide().catch(() => {});
+    setLoading(true);
+
+    try {
+      const r = await lookupWord(w);
+      setLoading(false);
+
+      if (r.status === "ok") {
+        setResult(r);
+        setHomoIndex(0);
+      } else {
+        // 답이 없는 경우 토스트 안내 (화면 전환 없이 스팟라이트 유지)
+        const msg =
+          r.status === "blocked"
+            ? "이 낱말은 찾을 수 없어요. 다른 낱말을 적어 볼까요?"
+            : `‘${w}’(은)는 아직 준비 중인 낱말이에요.`;
+        showToast(msg);
+      }
+    } catch {
+      setLoading(false);
+      showToast("연결 중 문제가 생겼어요. 다시 시도해 주세요.");
+    }
   }
 
   function handleFormSubmit(e: React.FormEvent) {
@@ -118,88 +204,362 @@ export default function App() {
     inputRef.current?.focus();
   }
 
-  function hideWindow() {
-    getCurrentWindow().hide();
+  function goBackToSearch() {
+    setResult(null);
+    setTimeout(() => {
+      inputRef.current?.focus();
+      inputRef.current?.select();
+    }, 50);
+  }
+
+  function openCurrentInBrowser() {
+    if (result && result.status === "ok") {
+      openUrl(`https://dic.dgedu.link/${encodeURIComponent(result.entry.word)}`);
+    } else {
+      openUrl("https://dic.dgedu.link");
+    }
   }
 
   return (
-    <div className="flex h-screen w-screen flex-col overflow-hidden rounded-2xl border-2 border-brand-300 bg-white/95 shadow-2xl backdrop-blur-xl">
-      {/* 컴팩트 스팟라이트 검색창 */}
-      <div
-        data-tauri-drag-region
-        className="flex h-[64px] shrink-0 items-center justify-between px-4 cursor-move bg-gradient-to-r from-brand-50/80 to-white/90"
-      >
-        <form onSubmit={handleFormSubmit} className="flex flex-1 items-center gap-3">
-          <div className="grid size-9 place-items-center rounded-xl bg-brand-600 text-white shadow-xs">
-            <Search className="size-5" />
-          </div>
-          <input
-            ref={inputRef}
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-            onKeyDown={handleInputKeyDown}
-            placeholder="궁금한 낱말이나 초성을 적어보세요 (예: ㄱㅇ)"
-            className="flex-1 bg-transparent text-xl font-bold text-ink outline-none placeholder:text-ink-faint placeholder:font-normal placeholder:text-base"
-          />
-          {query ? (
-            <button
-              type="button"
-              onClick={clearQuery}
-              className="grid size-7 place-items-center rounded-full text-ink-faint hover:bg-paper hover:text-ink transition-colors"
-              title="지우기"
-            >
-              <X className="size-4" />
-            </button>
-          ) : null}
-        </form>
-
-        <div className="ml-2 flex items-center gap-1">
-          <button
-            type="button"
-            onClick={() => openUrl("https://dic.dgedu.link")}
-            className="grid size-8 place-items-center rounded-lg text-ink-faint hover:bg-white hover:text-brand-700 transition-colors"
-            title="웹 사전 열기"
+    <div className="relative flex h-screen w-screen flex-col justify-start p-2 bg-transparent">
+      {/* 1. 검색 결과 별도 화면 */}
+      {result && result.status === "ok" ? (
+        <div className="flex h-full flex-col overflow-hidden rounded-3xl border-2 border-brand-200 bg-white/98 shadow-2xl backdrop-blur-xl animate-fade-in">
+          {/* 상단 액션 바 */}
+          <div
+            data-tauri-drag-region
+            className="flex shrink-0 items-center justify-between border-b border-line/60 bg-brand-50/70 px-4 py-2.5 cursor-move"
           >
-            <ExternalLink className="size-4" />
+            <button
+              onClick={goBackToSearch}
+              className="flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-bold text-brand-700 bg-white hover:bg-brand-100 transition-colors shadow-xs"
+            >
+              <ArrowLeft className="size-3.5" />
+              <span>검색으로 (ESC)</span>
+            </button>
+
+            <div className="flex items-center gap-1">
+              <button
+                type="button"
+                onClick={openCurrentInBrowser}
+                className="flex items-center gap-1 rounded-lg px-2.5 py-1 text-xs font-bold text-ink-soft hover:bg-white hover:text-brand-700 transition-colors"
+                title="웹에서 크게 보기"
+              >
+                <span>웹에서 크게</span>
+                <ExternalLink className="size-3.5" />
+              </button>
+              <button
+                type="button"
+                onClick={() => getCurrentWindow().hide()}
+                className="grid size-7 place-items-center rounded-lg text-ink-faint hover:bg-white hover:text-ink transition-colors"
+                title="트레이로 숨기기"
+              >
+                <Minus className="size-4" />
+              </button>
+            </div>
+          </div>
+
+          {/* 사전 상세 카드 영역 */}
+          <div className="flex-1 overflow-y-auto p-5">
+            <DedicatedResultCard
+              entry={result.entry}
+              level={level}
+              onLevelChange={setLevel}
+              homoIndex={homoIndex}
+              onHomoIndexChange={setHomoIndex}
+              simplifying={simplifying}
+              onOpenWeb={openCurrentInBrowser}
+            />
+          </div>
+        </div>
+      ) : (
+        /* 2. 스팟라이트 캡슐형 검색창 화면 */
+        <div className="relative flex flex-col">
+          <form
+            onSubmit={handleFormSubmit}
+            data-tauri-drag-region
+            className="relative flex h-[62px] w-full items-center rounded-full border-2 border-brand-200 bg-white py-1.5 pl-6 pr-2 shadow-[var(--shadow-primary-soft)] focus-within:border-brand-500 transition-all cursor-move"
+          >
+            <input
+              ref={inputRef}
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              onKeyDown={handleInputKeyDown}
+              type="search"
+              autoComplete="off"
+              placeholder="궁금한 낱말이나 초성을 적어보세요 (예: ㄱㅇ)"
+              className="h-full min-w-0 flex-1 bg-transparent text-xl sm:text-2xl text-ink outline-none placeholder:text-ink-faint leading-normal"
+            />
+
+            {loading ? (
+              <Loader2 className="mr-2 size-5 animate-spin text-brand-600" />
+            ) : query ? (
+              <button
+                type="button"
+                onClick={clearQuery}
+                className="mr-1 grid size-7 place-items-center rounded-full text-ink-faint hover:bg-paper hover:text-ink transition-colors"
+                title="검색어 지우기"
+              >
+                <X className="size-4" />
+              </button>
+            ) : null}
+
+            <div className="flex items-center gap-0.5 mr-1 text-ink-faint">
+              <button
+                type="button"
+                onClick={() => openUrl("https://dic.dgedu.link")}
+                className="grid size-8 place-items-center rounded-full hover:bg-paper hover:text-brand-700 transition-colors"
+                title="웹 사전 열기"
+              >
+                <ExternalLink className="size-3.5" />
+              </button>
+              <button
+                type="button"
+                onClick={() => getCurrentWindow().hide()}
+                className="grid size-8 place-items-center rounded-full hover:bg-paper hover:text-ink transition-colors"
+                title="트레이로 숨기기 (ESC)"
+              >
+                <Minus className="size-3.5" />
+              </button>
+            </div>
+
+            {/* 오른쪽 원형 파란색 검색 버튼 */}
+            <button
+              type="submit"
+              disabled={loading}
+              aria-label="낱말 찾기"
+              className="grid size-12 shrink-0 place-items-center rounded-full bg-brand-600 text-white hover:bg-brand-700 active:scale-95 transition-all shadow-sm cursor-pointer disabled:opacity-50"
+            >
+              <Search className="size-5" aria-hidden />
+            </button>
+          </form>
+
+          {/* 답이 없을 때 띄우는 플로팅 토스트 */}
+          {toast && (
+            <div className="pointer-events-none absolute left-1/2 top-[72px] z-50 -translate-x-1/2 whitespace-nowrap rounded-full bg-ink/90 px-4 py-2 text-xs font-bold text-white shadow-xl backdrop-blur-sm animate-fade-in">
+              {toast}
+            </div>
+          )}
+
+          {/* 자동완성 드롭다운 */}
+          {suggestions.length > 0 && !loading && (
+            <div className="mt-2 overflow-hidden rounded-2xl border border-brand-200 bg-white/98 p-2 shadow-2xl backdrop-blur-md animate-fade-in">
+              <div className="mb-1 flex items-center gap-1.5 px-3 py-1 text-xs font-bold text-brand-600">
+                <Sparkles className="size-3.5" />
+                <span>추천 낱말</span>
+              </div>
+              <div className="space-y-0.5">
+                {suggestions.map((item, idx) => {
+                  const isSelected = idx === selectedIndex;
+                  return (
+                    <button
+                      key={item}
+                      onClick={() => submitSearch(item)}
+                      onMouseEnter={() => setSelectedIndex(idx)}
+                      className={`flex w-full items-center justify-between rounded-xl px-4 py-2 text-left transition-colors cursor-pointer ${
+                        isSelected ? "bg-brand-50 text-brand-700 font-bold" : "text-ink hover:bg-paper"
+                      }`}
+                    >
+                      <span className="text-base font-semibold">{item}</span>
+                      <span className="text-xs text-brand-600 font-medium opacity-80">사전 보기 &rarr;</span>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// 결과 전용 화면 컴포넌트
+function DedicatedResultCard({
+  entry,
+  level,
+  onLevelChange,
+  homoIndex,
+  onHomoIndexChange,
+  simplifying,
+  onOpenWeb,
+}: {
+  entry: DictHomograph extends never ? never : any;
+  level: "dict" | "easy";
+  onLevelChange: (lv: "dict" | "easy") => void;
+  homoIndex: number;
+  onHomoIndexChange: (i: number) => void;
+  simplifying: boolean;
+  onOpenWeb: () => void;
+}) {
+  const homographs: DictHomograph[] =
+    entry.homographs && entry.homographs.length > 1
+      ? entry.homographs
+      : [{ pos: entry.pos, level: entry.level, senses: entry.senses, image: entry.image, audio: entry.audio, easySenses: entry.easySenses }];
+  const safeIndex = homoIndex < homographs.length ? homoIndex : 0;
+  const active = homographs[safeIndex] ?? homographs[0];
+
+  const usingEasy = level === "easy" && !!active.easySenses;
+  const senses: DictSense[] = usingEasy ? active.easySenses! : active.senses;
+  const primary = senses[0];
+  const rest = senses.slice(1);
+
+  const playAudio = () => {
+    if (active.audio?.url) {
+      new Audio(active.audio.url).play().catch(() => {});
+    }
+  };
+
+  return (
+    <div className="space-y-4">
+      {/* 낱말 헤더: 표제어, 발음, 품사, 쉬운말 토글 */}
+      <div className="flex items-start justify-between gap-3 border-b border-line/60 pb-3">
+        <div>
+          <div className="flex items-center gap-3">
+            <h1 className="text-4xl font-extrabold tracking-tight text-ink">{entry.word}</h1>
+            {active.audio ? (
+              <button
+                type="button"
+                onClick={playAudio}
+                className="grid size-9 place-items-center rounded-full bg-brand-50 text-brand-600 hover:bg-brand-100 transition-colors cursor-pointer"
+                title="발음 듣기"
+              >
+                <Volume2 className="size-5" />
+              </button>
+            ) : null}
+          </div>
+          <div className="mt-1.5 flex items-center gap-2 text-xs font-semibold text-ink-faint">
+            {entry.reading ? <span>[{entry.reading}]</span> : null}
+            {active.pos ? <span className="rounded-full bg-paper px-2 py-0.5">{active.pos}</span> : null}
+            {active.level ? <span className="rounded-full bg-brand-50 px-2 py-0.5 text-brand-700">{active.level}</span> : null}
+          </div>
+        </div>
+
+        {/* 쉬운 말로 / 사전 원문 토글 */}
+        <div className="flex items-center gap-1 rounded-full bg-paper p-1 border border-line">
+          <button
+            onClick={() => onLevelChange("dict")}
+            className={`flex items-center gap-1 rounded-full px-2.5 py-1 text-xs font-bold transition-colors cursor-pointer ${
+              level === "dict" ? "bg-white text-brand-700 shadow-xs" : "text-ink-faint hover:text-ink"
+            }`}
+          >
+            <BookOpen className="size-3" />
+            <span>사전 원문</span>
           </button>
           <button
-            type="button"
-            onClick={hideWindow}
-            className="grid size-8 place-items-center rounded-lg text-ink-faint hover:bg-white hover:text-ink transition-colors"
-            title="트레이로 숨기기 (ESC)"
+            onClick={() => onLevelChange("easy")}
+            className={`flex items-center gap-1 rounded-full px-2.5 py-1 text-xs font-bold transition-colors cursor-pointer ${
+              level === "easy" ? "bg-white text-brand-700 shadow-xs" : "text-ink-faint hover:text-ink"
+            }`}
           >
-            <Minus className="size-4" />
+            <Sparkles className="size-3" />
+            <span>쉬운 말로</span>
           </button>
         </div>
       </div>
 
-      {/* 실시간 자동완성 제안 목록 */}
-      {suggestions.length > 0 && (
-        <div className="flex-1 overflow-y-auto border-t border-line/60 p-2 bg-white/95">
-          <div className="mb-1.5 flex items-center gap-1.5 px-3 py-1 text-xs font-bold text-brand-700">
-            <Sparkles className="size-3.5" />
-            <span>추천 낱말 (Enter를 누르면 큰 화면으로 열려요)</span>
-          </div>
-          <div className="space-y-1">
-            {suggestions.map((item, idx) => {
-              const isSelected = idx === selectedIndex;
-              return (
-                <button
-                  key={item}
-                  onClick={() => submitSearch(item)}
-                  onMouseEnter={() => setSelectedIndex(idx)}
-                  className={`flex w-full items-center justify-between rounded-xl px-4 py-2 text-left transition-colors ${
-                    isSelected ? "bg-brand-50 text-brand-700 font-bold" : "text-ink hover:bg-paper"
-                  }`}
-                >
-                  <span className="text-base font-semibold">{item}</span>
-                  <span className="text-xs text-brand-600 font-medium">크게 보기 &rarr;</span>
-                </button>
-              );
-            })}
-          </div>
+      {/* 동음이의어 전환 탭 */}
+      {homographs.length > 1 && (
+        <div className="flex flex-wrap gap-1.5">
+          {homographs.map((h, i) => {
+            const preview = h.senses[0]?.def ?? "";
+            const short = preview.length > 12 ? `${preview.slice(0, 12)}…` : preview;
+            return (
+              <button
+                key={i}
+                onClick={() => onHomoIndexChange(i)}
+                className={`rounded-full border px-2.5 py-1 text-xs font-semibold transition-colors cursor-pointer ${
+                  i === safeIndex
+                    ? "border-brand-500 bg-brand-50 text-brand-700 font-bold"
+                    : "border-line bg-white text-ink-soft hover:bg-paper"
+                }`}
+              >
+                <span className="mr-1 text-brand-600 font-bold">{i + 1}</span>
+                {short}
+              </button>
+            );
+          })}
         </div>
       )}
+
+      {/* 뜻풀이 및 그림 영역 */}
+      <div className="grid grid-cols-1 gap-5 sm:grid-cols-[1fr_auto]">
+        <div className="min-w-0 space-y-3">
+          {level === "easy" && !usingEasy && simplifying ? (
+            <p className="text-xs text-brand-600 font-medium animate-pulse">쉬운 말로 바꾸는 중…</p>
+          ) : null}
+
+          {primary && (
+            <p className="text-2xl font-extrabold leading-relaxed text-ink">{primary.def}</p>
+          )}
+
+          {primary?.example && (
+            <div className="rounded-2xl border border-line/60 bg-paper/80 p-3.5 text-base">
+              <span className="font-bold text-brand-700 mr-2">예문</span>
+              <span className="text-ink-soft">
+                <HighlightWord text={primary.example} word={entry.word} />
+              </span>
+            </div>
+          )}
+
+          <div className="flex items-center justify-between pt-1">
+            <span className="text-[11px] text-ink-faint">
+              {entry.source === "encykorea" ? "출처: 한국민족문화대백과사전" : "출처: 국립국어원 한국어기초사전"}
+            </span>
+            <button
+              onClick={onOpenWeb}
+              className="flex items-center gap-1 text-xs font-bold text-brand-600 hover:text-brand-700"
+            >
+              <span>웹에서 크게 보기</span>
+              <ExternalLink className="size-3" />
+            </button>
+          </div>
+
+
+          {rest.length > 0 && (
+            <details className="mt-2 text-xs">
+              <summary className="cursor-pointer font-bold text-brand-600">다른 뜻 더 보기 ({rest.length})</summary>
+              <ul className="mt-2 space-y-2">
+                {rest.map((s, idx) => (
+                  <li key={idx} className="rounded-lg bg-paper p-2 text-ink-soft">
+                    <span className="font-bold text-ink mr-1">{idx + 2}.</span>
+                    <span>{s.def}</span>
+                  </li>
+                ))}
+              </ul>
+            </details>
+          )}
+        </div>
+
+        {/* 관련 사진/삽화 */}
+        {active.image ? (
+          <div className="size-48 shrink-0 overflow-hidden rounded-2xl border border-line bg-paper">
+            <img src={active.image.url} alt={`${entry.word} 그림`} className="size-full object-contain" />
+          </div>
+        ) : null}
+      </div>
     </div>
+  );
+}
+
+function HighlightWord({ text, word }: { text: string; word: string }) {
+  const cleanWord = word.replace(/[0-9]/g, "").trim();
+  if (!cleanWord || !text) return <span>{text}</span>;
+
+  const regex = new RegExp(`(${cleanWord})`, "g");
+  const parts = text.split(regex);
+
+  return (
+    <span>
+      {parts.map((part, i) =>
+        part === cleanWord ? (
+          <mark key={i} className="rounded-md bg-amber-100 text-amber-950 font-bold px-1.5 py-0.5">
+            {part}
+          </mark>
+        ) : (
+          <span key={i}>{part}</span>
+        ),
+      )}
+    </span>
   );
 }

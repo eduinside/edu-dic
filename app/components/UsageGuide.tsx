@@ -6,7 +6,7 @@ const STEPS: { icon: typeof Search; title: string; body: string }[] = [
   { icon: Sparkles, title: "2. 쉬운 말로", body: "상단의 ‘사전 그대로 / 쉬운 말로’ 버튼으로 뜻풀이를 더 쉽게 바꿀 수 있어요. 초등학생 눈높이에 맞게 더 친절하고 알기 쉽게 풀어줘요." },
   { icon: Star, title: "3. 즐겨찾기", body: "낱말 옆 별표(★)를 누르면 즐겨찾기에 저장돼요. 수업에서 자주 쓰는 낱말을 모아 두기 좋아요." },
   { icon: BookMarked, title: "4. 나의 낱말사전", body: "화면 위쪽의 ‘나의 낱말사전’에서 내가 찾은 낱말·즐겨찾기·자주 찾은 낱말을 모아 보고, ‘낱말 익히기’ 주제 카드로 새 낱말도 둘러볼 수 있어요." },
-  { icon: Monitor, title: "5. PC 스팟라이트 앱", body: "수업 중 언제든 단축키(Ctrl+Shift+D)로 화면 위에 바로 사전을 띄울 수 있는 '어린이 쉬운 사전 데스크탑' 앱을 제공해요." },
+  { icon: Monitor, title: "5. PC 스팟라이트 앱", body: "수업 중 언제든 단축키(Ctrl+Alt+D)로 화면 위에 바로 사전을 띄울 수 있는 '어린이 쉬운 사전 데스크탑' 앱을 제공해요." },
 ];
 
 export default function UsageGuide({ open, onClose }: { open: boolean; onClose: () => void }) {
@@ -46,9 +46,10 @@ export default function UsageGuide({ open, onClose }: { open: boolean; onClose: 
             <span className="text-2xl">💻</span>
             <div>
               <div className="text-sm font-extrabold text-brand-900">어린이 쉬운 사전 데스크탑</div>
-              <div className="text-xs text-brand-700">단축키(Ctrl+Shift+D)로 언제든 바로 검색 (Windows용)</div>
+              <div className="text-xs text-brand-700">단축키(Ctrl+Alt+D)로 언제든 바로 검색 (Windows용)</div>
             </div>
           </div>
+
           <a
             href="/api/download/desktop"
             download="어린이 쉬운 사전 데스크탑 설치.exe"

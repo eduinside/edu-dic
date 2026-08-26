@@ -29,11 +29,12 @@ fn resize_window(window: WebviewWindow, height: f64) -> Result<(), String> {
     Ok(())
 }
 
-
-
-
-
-
+#[tauri::command]
+fn toggle_fullscreen(window: WebviewWindow) -> Result<bool, String> {
+    let is_fs = window.is_fullscreen().map_err(|e| e.to_string())?;
+    window.set_fullscreen(!is_fs).map_err(|e| e.to_string())?;
+    Ok(!is_fs)
+}
 
 #[tauri::command]
 fn toggle_spotlight(app: AppHandle) -> Result<(), String> {
@@ -108,16 +109,7 @@ fn main() {
                         ..
                     } = event
                     {
-                        let app = tray.app_handle();
-                        if let Some(window) = app.get_webview_window("main") {
-                            let visible = window.is_visible().unwrap_or(false);
-                            if visible {
-                                let _ = window.hide();
-                            } else {
-                                let _ = window.show();
-                                let _ = window.set_focus();
-                            }
-                        }
+                        show_and_focus(tray.app_handle());
                     }
                 })
                 .build(app)?;
@@ -156,7 +148,7 @@ fn main() {
             }
             _ => {}
         })
-        .invoke_handler(tauri::generate_handler![resize_window, toggle_spotlight])
+        .invoke_handler(tauri::generate_handler![resize_window, toggle_spotlight, toggle_fullscreen])
         .run(tauri::generate_context!())
         .expect("어린이 쉬운 사전 데스크탑 실행 중 오류가 발생했습니다.");
 }

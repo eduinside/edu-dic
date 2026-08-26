@@ -10,9 +10,11 @@ import {
   Loader2,
   Maximize2,
   Minimize2,
+  ExternalLink,
 } from "lucide-react";
 import { invoke } from "@tauri-apps/api/core";
 import { getCurrentWindow } from "@tauri-apps/api/window";
+import { openUrl } from "@tauri-apps/plugin-opener";
 import {
   fetchEasySenses,
   fetchSuggestions,
@@ -82,14 +84,14 @@ export default function App() {
     toastTimer.current = setTimeout(() => setToast(null), 3000);
   };
 
-  // 창 높이 동적 조절 (검색바 92px <-> 자동완성 최대 500px <-> 결과 화면 680px)
+  // 창 높이 동적 조절 (검색바 92px <-> 자동완성 최대 520px <-> 결과 화면 680px)
   useEffect(() => {
     if (isFullscreen) return;
     let targetHeight = 92;
     if (result && result.status === "ok") {
       targetHeight = 680;
     } else if (suggestions.length > 0) {
-      targetHeight = Math.min(92 + suggestions.length * 48 + 36, 500);
+      targetHeight = Math.min(92 + 16 + suggestions.length * 52 + 36, 520);
     }
     invoke("resize_window", { height: targetHeight }).catch(() => {});
   }, [result, suggestions, isFullscreen]);
@@ -113,10 +115,15 @@ export default function App() {
 
   // 전체화면 토글
   const toggleFullscreen = async () => {
-    const win = getCurrentWindow();
-    const next = !isFullscreen;
-    await win.setFullscreen(next);
-    setIsFullscreen(next);
+    try {
+      const next = await invoke<boolean>("toggle_fullscreen");
+      setIsFullscreen(next);
+    } catch {
+      const win = getCurrentWindow();
+      const next = !isFullscreen;
+      await win.setFullscreen(next);
+      setIsFullscreen(next);
+    }
   };
 
   // ESC 키로 뒤로가기/닫기 & F11 전체화면
@@ -129,7 +136,7 @@ export default function App() {
       }
       if (e.key === "Escape") {
         if (isFullscreen) {
-          getCurrentWindow().setFullscreen(false);
+          invoke("toggle_fullscreen").catch(() => {});
           setIsFullscreen(false);
         } else if (result) {
           setResult(null);
@@ -200,7 +207,7 @@ export default function App() {
     };
   }, [level, result, homoIndex]);
 
-  // 낱말 검색: 성공 시 별도 화면으로 전환, 실패 시 토스트 표시
+  // 낱말 검색: 성공 시 별도 화면으로 전환, 실패 시 토스트 표시 (자동 읽기 없음)
   async function submitSearch(wordToSearch: string) {
     const w = wordToSearch.trim();
     if (!w) return;
@@ -215,9 +222,6 @@ export default function App() {
       if (r.status === "ok") {
         setResult(r);
         setHomoIndex(0);
-        // 단어 로드 시 자동으로 발음 1회 재생
-        const homographs = r.entry.homographs && r.entry.homographs.length > 0 ? r.entry.homographs : [{ audio: r.entry.audio }];
-        speakWord(r.entry.word, homographs[0]?.audio?.url);
       } else {
         const suggestion = "suggestion" in r ? r.suggestion : undefined;
         const msg =
@@ -283,7 +287,7 @@ export default function App() {
 
   function goBackToSearch() {
     if (isFullscreen) {
-      getCurrentWindow().setFullscreen(false);
+      invoke("toggle_fullscreen").catch(() => {});
       setIsFullscreen(false);
     }
     setResult(null);
@@ -291,6 +295,14 @@ export default function App() {
       inputRef.current?.focus();
       inputRef.current?.select();
     }, 50);
+  }
+
+  function openCurrentInBrowser() {
+    if (result && result.status === "ok") {
+      openUrl(`https://dic.dgedu.link/${encodeURIComponent(result.entry.word)}`);
+    } else {
+      openUrl("https://dic.dgedu.link");
+    }
   }
 
   return (
@@ -348,7 +360,7 @@ export default function App() {
               homoIndex={homoIndex}
               onHomoIndexChange={setHomoIndex}
               simplifying={simplifying}
-              onToggleFullscreen={toggleFullscreen}
+              onOpenWeb={openCurrentInBrowser}
               isFullscreen={isFullscreen}
             />
           </div>
@@ -359,12 +371,14 @@ export default function App() {
           <form
             onSubmit={handleFormSubmit}
             data-tauri-drag-region
-            className="relative flex h-[72px] w-full items-center rounded-full border-2 border-brand-300 bg-white py-1.5 pl-2.5 pr-2 shadow-[var(--shadow-primary-soft)] focus-within:border-brand-500 transition-all cursor-move"
+            className="relative flex h-[72px] w-full items-center rounded-full border-2 border-brand-300 bg-white py-1.5 pl-3 pr-2 shadow-[var(--shadow-primary-soft)] focus-within:border-brand-500 transition-all cursor-move"
           >
-            {/* 왼쪽 동그란 앱 아이콘 (주황색 영역 요청 반영) */}
-            <div className="mr-3 grid size-12 shrink-0 place-items-center rounded-full bg-brand-50 border-2 border-brand-200 shadow-2xs select-none">
-              <span className="text-2xl leading-none">📖</span>
-            </div>
+            {/* 왼쪽 투명 앱 로고 이미지 (원형/테두리 박스 없이 자연스럽게 배치) */}
+            <img
+              src="/app-icon.png"
+              alt="앱 로고"
+              className="mr-2 size-9 shrink-0 object-contain select-none pointer-events-none"
+            />
 
             <input
               ref={inputRef}
@@ -424,8 +438,8 @@ export default function App() {
 
           {/* 추천 낱말 드롭다운 (잘림 방지 및 여유로운 하단 패딩) */}
           {suggestions.length > 0 && !loading && (
-            <div className="mt-2 max-h-[400px] overflow-y-auto rounded-3xl border-2 border-brand-200 bg-white p-2.5 shadow-2xl animate-fade-in">
-              <div className="mb-1.5 flex items-center gap-1 px-3 py-1 text-xs font-bold text-brand-600">
+            <div className="mt-2.5 overflow-hidden rounded-3xl border-2 border-brand-200 bg-white p-3 shadow-2xl animate-fade-in">
+              <div className="mb-1.5 flex items-center gap-1.5 px-3 py-1 text-xs font-bold text-brand-600">
                 <Sparkles className="size-3.5" />
                 <span>추천 낱말 (Enter로 바로 보기)</span>
               </div>
@@ -463,7 +477,7 @@ function DedicatedResultCard({
   homoIndex,
   onHomoIndexChange,
   simplifying,
-  onToggleFullscreen,
+  onOpenWeb,
   isFullscreen,
 }: {
   entry: DictHomograph extends never ? never : any;
@@ -472,7 +486,7 @@ function DedicatedResultCard({
   homoIndex: number;
   onHomoIndexChange: (i: number) => void;
   simplifying: boolean;
-  onToggleFullscreen: () => void;
+  onOpenWeb: () => void;
   isFullscreen: boolean;
 }) {
   const homographs: DictHomograph[] =
@@ -500,7 +514,7 @@ function DedicatedResultCard({
             <h1 className={`font-extrabold tracking-tight text-ink ${isFullscreen ? "text-5xl sm:text-6xl" : "text-3xl sm:text-4xl"}`}>
               {entry.word}
             </h1>
-            {/* 소리 듣기 버튼 (항상 제공) */}
+            {/* 소리 듣기 버튼 (클릭 시에만 재생) */}
             <button
               type="button"
               onClick={playVoice}
@@ -564,7 +578,7 @@ function DedicatedResultCard({
         </div>
       )}
 
-      {/* 뜻풀이 및 사진 영역 (사진 높이 대폭 확대) */}
+      {/* 뜻풀이 및 사진 영역 */}
       <div className="space-y-4">
         {level === "easy" && !usingEasy && simplifying ? (
           <p className="text-xs text-brand-600 font-medium animate-pulse">쉬운 말로 바꾸는 중…</p>
@@ -594,16 +608,17 @@ function DedicatedResultCard({
           </div>
         ) : null}
 
+        {/* 하단 출처 및 웹에서 크게 보기 버튼 */}
         <div className="flex items-center justify-between pt-2">
           <span className="text-xs text-ink-faint">
             {entry.source === "encykorea" ? "출처: 한국민족문화대백과사전" : "출처: 국립국어원 한국어기초사전"}
           </span>
           <button
-            onClick={onToggleFullscreen}
+            onClick={onOpenWeb}
             className="flex items-center gap-1 text-xs sm:text-sm font-bold text-brand-600 hover:text-brand-700 cursor-pointer"
           >
-            {isFullscreen ? <Minimize2 className="size-3.5" /> : <Maximize2 className="size-3.5" />}
-            <span>{isFullscreen ? "창 크기로 돌아가기" : "전체화면으로 보기 (F11)"}</span>
+            <ExternalLink className="size-3.5" />
+            <span>웹에서 크게 보기</span>
           </button>
         </div>
 

@@ -22,12 +22,13 @@ struct AppState {
 fn resize_window(window: WebviewWindow, height: f64) -> Result<(), String> {
     window
         .set_size(Size::Logical(LogicalSize {
-            width: 680.0,
+            width: 440.0,
             height,
         }))
         .map_err(|e| e.to_string())?;
     Ok(())
 }
+
 
 
 

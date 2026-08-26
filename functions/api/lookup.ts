@@ -4,37 +4,48 @@ import { getOrFetchEntry } from "../lib/dictionary.ts";
 import { isChoseongOnly, matchesChoseongOrPrefix } from "../lib/choseong.ts";
 import { KrdictError, searchWord } from "../lib/krdict.ts";
 import { searchNaverErrata } from "../lib/naver.ts";
+import { predictWordCandidate } from "../lib/ai.ts";
 import { bumpPopular, getCachedWords } from "../lib/store.ts";
 
-
-// 사전에 없는 낱말일 때만(드문 경로) 네이버 오타 변환 API(NCP API Hub)로 교정을 시도하고, 그 결과가
-// 실제 krdict 표제어인지 다시 검증한다(D29 — AI 대신 이 공식 API로 교체. 이미지 검색과 같은 키·쿼터
-// 공유). 지어낸 낱말을 보여주지 않기 위한 접지(grounding) 단계는 그대로 유지 — 검증 실패·키 미설정·
-// 차단어면 조용히 undefined(사용자에게는 평범한 "준비 중" 안내만 보임).
+// 사전에 없는 낱말이거나 미등록 초성일 때:
+// 1) 네이버 오타 변환 API (NCP API Hub)
+// 2) AI 추측 추천 (Timely / Gemini)
+// 3) 국어원 표제어 유효성 검증
 async function suggestCorrection(env: Env, word: string): Promise<string | undefined> {
   const naverId = env["X-NCP-APIGW-API-KEY-ID"];
   const naverKey = env["X-NCP-APIGW-API-KEY"];
-  if (!naverId || !naverKey || !env.KRDICT_API_KEY) return undefined;
 
-  const corrected = await searchNaverErrata(naverId, naverKey, word).catch(() => null);
-  if (!corrected || corrected === word || corrected.length > 12) return undefined;
-  if (isBlocked(corrected)) return undefined;
-
-  try {
-    const found = await searchWord(env.KRDICT_API_KEY, corrected);
-    return found ? found.word : undefined;
-  } catch {
-    return undefined;
+  // 1. 네이버 오타 변환 시도
+  if (naverId && naverKey) {
+    const corrected = await searchNaverErrata(naverId, naverKey, word).catch(() => null);
+    if (corrected && corrected !== word && corrected.length <= 12 && !isBlocked(corrected)) {
+      if (env.KRDICT_API_KEY) {
+        try {
+          const found = await searchWord(env.KRDICT_API_KEY, corrected);
+          if (found) return found.word;
+        } catch {}
+      } else {
+        return corrected;
+      }
+    }
   }
+
+  // 2. AI 낱말 추측 시도 (초성 미등록어 'ㄱㄱㅁ' 또는 오타 '고굼마' 등)
+  const aiCandidate = await predictWordCandidate(env, word).catch(() => null);
+  if (aiCandidate && aiCandidate !== word && !isBlocked(aiCandidate)) {
+    if (env.KRDICT_API_KEY) {
+      try {
+        const found = await searchWord(env.KRDICT_API_KEY, aiCandidate);
+        if (found) return found.word;
+      } catch {}
+    }
+    return aiCandidate;
+  }
+
+  return undefined;
 }
 
 // GET /api/lookup?q=낱말
-//
-// 1) 로컬 금칙어 프리필터 → 즉시 차단(D8)
-// 2) edudic_dict_cache 조회 → HIT면 즉시 반환(krdict 미호출, 계획서 ★ "바로 찾아서 바로 보여준다")
-// 3) MISS → krdict search+view 호출·정규화(+encykorea/네이버 이미지 폴백) → 캐시 저장 → 반환.
-//    미수록이면 not_found(D10 — 표준대사전 폴백 없음). 이때만 네이버 오타 변환을 1회 시도(D29).
-// 4) 성공 조회만 edudic_popular 카운트 증가(익명, 차단어는 집계 제외)
 export const onRequestGet: PagesFunction<Env> = async ({ request, env, waitUntil }) => {
   const url = new URL(request.url);
   let q = (url.searchParams.get("q") ?? "").trim();
@@ -44,26 +55,22 @@ export const onRequestGet: PagesFunction<Env> = async ({ request, env, waitUntil
     return json({ status: "blocked", word: q });
   }
 
-  // 0) 검색어가 초성만으로 구성된 경우 (예: "ㄷㄱ", "ㄱㅇ")
-  // D1 캐시된 낱말 목록에서 해당 초성으로 시작하거나 일치하는 최우선 낱말로 자동 대체 조회
+  // 0) 검색어가 초성만으로 구성된 경우 (예: "ㄷㄱ", "ㄱㄱㅁ")
   if (isChoseongOnly(q)) {
     const cachedWords = await getCachedWords(env);
     const matched = cachedWords.find((w) => matchesChoseongOrPrefix(w, q));
     if (matched) {
       q = matched;
     } else {
-      return json({
-        status: "not_found",
-        word: q,
-        message: `‘${q}’ 초성에 맞는 추천 낱말을 찾지 못했어요.`,
-      });
+      // D1에 없는 초성인 경우: AI에게 대표 낱말 추측 요청 (예: 'ㄱㄱㅁ' -> '고구마')
+      const suggestion = await suggestCorrection(env, q).catch(() => undefined);
+      return json({ status: "not_found", word: q, suggestion });
     }
   }
 
   if (!env.KRDICT_API_KEY) {
     return json({ status: "error", word: q, message: "KRDICT_API_KEY 미설정(.dev.vars)" }, { status: 500 });
   }
-
 
   try {
     const entry = await getOrFetchEntry(env, q, waitUntil);
@@ -80,3 +87,4 @@ export const onRequestGet: PagesFunction<Env> = async ({ request, env, waitUntil
     return json({ status: "error", word: q, message: "알 수 없는 오류" }, { status: 500 });
   }
 };
+

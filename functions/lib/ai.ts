@@ -87,3 +87,27 @@ export async function generateText(env: Env, opts: GenerateOpts): Promise<string
 
   return null;
 }
+
+/**
+ * 사용자가 입력한 오타나 미등록 초성(예: 'ㄱㄱㅁ' -> '고구마', '고굼마' -> '고구마')을 바탕으로
+ * 찾으려 했을 가장 유력한 한국어 표제어 단어 1개를 AI로 추측합니다.
+ */
+export async function predictWordCandidate(env: Env, input: string): Promise<string | null> {
+  const clean = input.trim();
+  if (!clean || clean.length > 15) return null;
+
+  const systemPrompt = `너는 초등학생 대상 한국어 사전의 검색어 추천 전문가야.
+사용자가 입력한 오타나 초성 단어(예: 'ㄱㄱㅁ' -> '고구마', '고굼마' -> '고구마', 'ㅂㄴㄴ' -> '바나나', 'ㄷㄱ' -> '당근')를 보고, 사용자가 찾으려 했을 가장 대표적이고 친숙한 단 하나의 한국어 표준어 표제어(명사/동사 기본형)만 출력해.
+주의: 따옴표나 부가 설명 없이 오직 추천 단어 1개만 단독으로 반환할 것.`;
+
+  const text = await generateText(env, {
+    systemPrompt,
+    userMessage: `입력어: ${clean}`,
+    temperature: 0.1,
+  });
+
+  if (!text) return null;
+  const word = text.replace(/["'‘’.!]/g, "").trim().split(/\s+/)[0];
+  return word && word !== clean && word.length <= 10 ? word : null;
+}
+

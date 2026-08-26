@@ -22,7 +22,9 @@ export const onRequest: PagesFunction<Env> = async (context) => {
   return new Response(context.request.method === "HEAD" ? null : object.body, {
     headers: {
       "content-type": "application/json; charset=utf-8",
-      "cache-control": "public, max-age=300",
+      "cache-control": "no-cache, no-store, must-revalidate",
+      "access-control-allow-origin": "*",
     },
   });
 };
+

@@ -1,7 +1,7 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
   "productName": "어린이 쉬운 사전 데스크탑",
-  "version": "0.1.4",
+  "version": "0.2.0",
   "identifier": "link.dgedu.dic.desktop",
 
 
@@ -10,17 +10,17 @@
   "build": {
     "beforeDevCommand": "npm run dev",
     "beforeBuildCommand": "npm run build",
-    "devUrl": "http://localhost:1421",
+    "devUrl": "http://localhost:1420",
     "frontendDist": "../dist"
   },
   "app": {
     "windows": [
       {
         "title": "어린이 쉬운 사전 데스크탑",
-        "width": 480,
-        "height": 88,
+        "width": 500,
+        "height": 92,
         "minWidth": 380,
-        "minHeight": 88,
+        "minHeight": 92,
         "resizable": true,
         "decorations": false,
         "transparent": true,
@@ -52,10 +52,10 @@
   },
   "plugins": {
     "updater": {
-      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IEQwNEFCMUNFMjg4OUFBNgpSV1NtbW9qaUhLc0VEZFlyZDRuOG00M2pISzhNQ0VFYmxnRE9ld3pEdGY2b0ErcWpOaUxxTklWTAo=",
-      "privateKey": "updater.key",
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDk4NTZGQjg1OTIzRkM1QkQKUldTOXhUK1NoZnRXbU5zT2xwVGpnQk9yL1o1Tmp6TkV6NW16SmF3VjdYSkFBL3Yvc01VZGZUVWkK",
       "endpoints": ["https://dic.dgedu.link/api/download/desktop-latest.json"]
     }
+
   }
 
 

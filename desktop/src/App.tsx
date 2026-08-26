@@ -3,16 +3,16 @@ import {
   Search,
   Sparkles,
   X,
-  ExternalLink,
   Minus,
   ArrowLeft,
   Volume2,
   BookOpen,
   Loader2,
+  Maximize2,
+  Minimize2,
 } from "lucide-react";
 import { invoke } from "@tauri-apps/api/core";
 import { getCurrentWindow } from "@tauri-apps/api/window";
-import { openUrl } from "@tauri-apps/plugin-opener";
 import {
   fetchEasySenses,
   fetchSuggestions,
@@ -37,6 +37,29 @@ function isChoseongOnly(str: string): boolean {
   return true;
 }
 
+// 낱말 음성 발음 재생 (국어원 공식 MP3 우선, 미제공 시 Web Speech API TTS 폴백)
+function speakWord(word: string, audioUrl?: string) {
+  const cleanWord = word.replace(/[0-9]/g, "").trim();
+  if (audioUrl) {
+    const audio = new Audio(audioUrl);
+    audio.play().catch(() => {
+      fallbackTts(cleanWord);
+    });
+    return;
+  }
+  fallbackTts(cleanWord);
+}
+
+function fallbackTts(text: string) {
+  if (typeof window !== "undefined" && "speechSynthesis" in window) {
+    window.speechSynthesis.cancel();
+    const utter = new SpeechSynthesisUtterance(text);
+    utter.lang = "ko-KR";
+    utter.rate = 0.85;
+    window.speechSynthesis.speak(utter);
+  }
+}
+
 export default function App() {
   const [query, setQuery] = useState("");
   const [suggestions, setSuggestions] = useState<string[]>([]);
@@ -47,6 +70,7 @@ export default function App() {
   const [level, setLevel] = useState<"dict" | "easy">("dict");
   const [homoIndex, setHomoIndex] = useState(0);
   const [simplifying, setSimplifying] = useState(false);
+  const [isFullscreen, setIsFullscreen] = useState(false);
 
   const inputRef = useRef<HTMLInputElement>(null);
   const debounceTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
@@ -55,26 +79,27 @@ export default function App() {
   const showToast = (msg: string) => {
     setToast(msg);
     clearTimeout(toastTimer.current);
-    toastTimer.current = setTimeout(() => setToast(null), 2800);
+    toastTimer.current = setTimeout(() => setToast(null), 3000);
   };
 
-  // 창 높이 동적 조절 (검색바 88px <-> 자동완성 380px <-> 결과 화면 560px)
+  // 창 높이 동적 조절 (검색바 92px <-> 자동완성 최대 500px <-> 결과 화면 680px)
   useEffect(() => {
-    let targetHeight = 88;
+    if (isFullscreen) return;
+    let targetHeight = 92;
     if (result && result.status === "ok") {
-      targetHeight = 560;
+      targetHeight = 680;
     } else if (suggestions.length > 0) {
-      targetHeight = Math.min(88 + suggestions.length * 44 + 20, 380);
+      targetHeight = Math.min(92 + suggestions.length * 48 + 36, 500);
     }
     invoke("resize_window", { height: targetHeight }).catch(() => {});
-  }, [result, suggestions]);
+  }, [result, suggestions, isFullscreen]);
 
   // 시작 시 업데이트 체크 및 자동 포커스
   useEffect(() => {
     checkForAppUpdates();
     inputRef.current?.focus();
 
-    const unlisten = getCurrentWindow().listen("tauri://focus", () => {
+    const unlistenFocus = getCurrentWindow().listen("tauri://focus", () => {
       if (!result) {
         inputRef.current?.focus();
         inputRef.current?.select();
@@ -82,15 +107,31 @@ export default function App() {
     });
 
     return () => {
-      unlisten.then((f) => f());
+      unlistenFocus.then((f) => f());
     };
   }, [result]);
 
-  // ESC 키로 뒤로가기 또는 닫기
+  // 전체화면 토글
+  const toggleFullscreen = async () => {
+    const win = getCurrentWindow();
+    const next = !isFullscreen;
+    await win.setFullscreen(next);
+    setIsFullscreen(next);
+  };
+
+  // ESC 키로 뒤로가기/닫기 & F11 전체화면
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "F11") {
+        e.preventDefault();
+        toggleFullscreen();
+        return;
+      }
       if (e.key === "Escape") {
-        if (result) {
+        if (isFullscreen) {
+          getCurrentWindow().setFullscreen(false);
+          setIsFullscreen(false);
+        } else if (result) {
           setResult(null);
           inputRef.current?.focus();
         } else if (suggestions.length > 0) {
@@ -102,7 +143,7 @@ export default function App() {
     };
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [result, suggestions]);
+  }, [result, suggestions, isFullscreen]);
 
   // 실시간 초성/단어 자동완성 (결과 화면이 아닐 때만)
   useEffect(() => {
@@ -118,7 +159,7 @@ export default function App() {
       const list = await fetchSuggestions(trimmed);
       setSuggestions(list);
       setSelectedIndex(-1);
-    }, 100);
+    }, 80);
 
     return () => clearTimeout(debounceTimer.current);
   }, [query, result]);
@@ -174,6 +215,9 @@ export default function App() {
       if (r.status === "ok") {
         setResult(r);
         setHomoIndex(0);
+        // 단어 로드 시 자동으로 발음 1회 재생
+        const homographs = r.entry.homographs && r.entry.homographs.length > 0 ? r.entry.homographs : [{ audio: r.entry.audio }];
+        speakWord(r.entry.word, homographs[0]?.audio?.url);
       } else {
         const suggestion = "suggestion" in r ? r.suggestion : undefined;
         const msg =
@@ -238,6 +282,10 @@ export default function App() {
   }
 
   function goBackToSearch() {
+    if (isFullscreen) {
+      getCurrentWindow().setFullscreen(false);
+      setIsFullscreen(false);
+    }
     setResult(null);
     setTimeout(() => {
       inputRef.current?.focus();
@@ -245,55 +293,54 @@ export default function App() {
     }, 50);
   }
 
-  function openCurrentInBrowser() {
-    if (result && result.status === "ok") {
-      openUrl(`https://dic.dgedu.link/${encodeURIComponent(result.entry.word)}`);
-    } else {
-      openUrl("https://dic.dgedu.link");
-    }
-  }
-
   return (
-    <div className="relative flex h-full w-full flex-col justify-start p-2 bg-transparent select-none">
-      {/* 1. 검색 결과 별도 화면 */}
+    <div className={`relative flex h-full w-full flex-col justify-start select-none ${isFullscreen ? "bg-white p-6 sm:p-12 overflow-y-auto" : "p-2 bg-transparent"}`}>
+      {/* 1. 검색 결과 화면 (일반 모드 또는 전체화면 모드) */}
       {result && result.status === "ok" ? (
-        <div className="flex h-[540px] flex-col overflow-hidden rounded-3xl border-2 border-brand-200 bg-white shadow-2xl animate-fade-in">
+        <div className={`flex flex-col overflow-hidden bg-white ${
+          isFullscreen
+            ? "mx-auto max-w-5xl w-full animate-fade-in"
+            : "h-[660px] rounded-3xl border-2 border-brand-200 shadow-2xl animate-fade-in"
+        }`}>
           {/* 상단 액션 바 */}
           <div
             data-tauri-drag-region
-            className="flex shrink-0 items-center justify-between border-b border-line bg-brand-50/90 px-3.5 py-2 cursor-move"
+            className={`flex shrink-0 items-center justify-between border-b border-line bg-brand-50/90 px-4 py-2.5 ${isFullscreen ? "rounded-2xl mb-6" : "cursor-move"}`}
           >
             <button
               onClick={goBackToSearch}
-              className="flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-bold text-brand-700 bg-white hover:bg-brand-100 transition-colors shadow-xs cursor-pointer border border-brand-200"
+              className="flex items-center gap-1.5 rounded-full px-3.5 py-1.5 text-xs sm:text-sm font-bold text-brand-700 bg-white hover:bg-brand-100 transition-colors shadow-xs cursor-pointer border border-brand-200"
             >
-              <ArrowLeft className="size-3.5" />
-              <span>검색 (ESC)</span>
+              <ArrowLeft className="size-4" />
+              <span>검색으로 (ESC)</span>
             </button>
 
-            <div className="flex items-center gap-1">
+            <div className="flex items-center gap-1.5">
               <button
                 type="button"
-                onClick={openCurrentInBrowser}
-                className="flex items-center gap-1 rounded-lg px-2 py-1 text-xs font-bold text-ink-soft hover:bg-white hover:text-brand-700 transition-colors cursor-pointer"
-                title="웹에서 크게 보기"
+                onClick={toggleFullscreen}
+                className="flex items-center gap-1.5 rounded-xl bg-white px-3 py-1.5 text-xs sm:text-sm font-bold text-brand-700 hover:bg-brand-100 border border-brand-200 transition-colors shadow-xs cursor-pointer"
+                title={isFullscreen ? "전체화면 종료 (ESC / F11)" : "전체화면으로 보기 (F11)"}
               >
-                <span>웹에서 크게</span>
-                <ExternalLink className="size-3" />
+                {isFullscreen ? <Minimize2 className="size-4" /> : <Maximize2 className="size-4" />}
+                <span>{isFullscreen ? "창 모드로" : "전체화면으로 보기"}</span>
               </button>
-              <button
-                type="button"
-                onClick={() => getCurrentWindow().hide()}
-                className="grid size-6 place-items-center rounded-lg text-ink-faint hover:bg-white hover:text-ink transition-colors cursor-pointer"
-                title="트레이로 숨기기"
-              >
-                <Minus className="size-3.5" />
-              </button>
+
+              {!isFullscreen && (
+                <button
+                  type="button"
+                  onClick={() => getCurrentWindow().hide()}
+                  className="grid size-8 place-items-center rounded-lg text-ink-faint hover:bg-white hover:text-ink transition-colors cursor-pointer"
+                  title="트레이로 숨기기"
+                >
+                  <Minus className="size-4" />
+                </button>
+              )}
             </div>
           </div>
 
           {/* 사전 상세 카드 영역 */}
-          <div className="flex-1 overflow-y-auto p-4">
+          <div className="flex-1 overflow-y-auto p-4 sm:p-6">
             <DedicatedResultCard
               entry={result.entry}
               level={level}
@@ -301,7 +348,8 @@ export default function App() {
               homoIndex={homoIndex}
               onHomoIndexChange={setHomoIndex}
               simplifying={simplifying}
-              onOpenWeb={openCurrentInBrowser}
+              onToggleFullscreen={toggleFullscreen}
+              isFullscreen={isFullscreen}
             />
           </div>
         </div>
@@ -311,10 +359,10 @@ export default function App() {
           <form
             onSubmit={handleFormSubmit}
             data-tauri-drag-region
-            className="relative flex h-[68px] w-full items-center rounded-full border-2 border-brand-300 bg-white py-1 pl-3 pr-1.5 shadow-[var(--shadow-primary-soft)] focus-within:border-brand-500 transition-all cursor-move"
+            className="relative flex h-[72px] w-full items-center rounded-full border-2 border-brand-300 bg-white py-1.5 pl-2.5 pr-2 shadow-[var(--shadow-primary-soft)] focus-within:border-brand-500 transition-all cursor-move"
           >
-            {/* 왼쪽 동그란 앱 아이콘 */}
-            <div className="mr-2.5 grid size-11 shrink-0 place-items-center rounded-full bg-brand-50 border border-brand-100 shadow-2xs select-none">
+            {/* 왼쪽 동그란 앱 아이콘 (주황색 영역 요청 반영) */}
+            <div className="mr-3 grid size-12 shrink-0 place-items-center rounded-full bg-brand-50 border-2 border-brand-200 shadow-2xs select-none">
               <span className="text-2xl leading-none">📖</span>
             </div>
 
@@ -327,16 +375,16 @@ export default function App() {
               autoComplete="off"
               spellCheck={false}
               placeholder="궁금한 낱말을 적어보세요"
-              className="h-full min-w-0 flex-1 bg-transparent text-xl font-extrabold text-ink outline-none placeholder:text-ink-faint placeholder:font-normal leading-normal"
+              className="h-full min-w-0 flex-1 bg-transparent text-2xl font-extrabold text-ink outline-none placeholder:text-ink-faint placeholder:font-normal leading-normal"
             />
 
             {loading ? (
-              <Loader2 className="mr-1.5 size-5 animate-spin text-brand-600" />
+              <Loader2 className="mr-2 size-5 animate-spin text-brand-600" />
             ) : query ? (
               <button
                 type="button"
                 onClick={clearQuery}
-                className="mr-1 grid size-7 place-items-center rounded-full text-ink-faint hover:bg-paper hover:text-ink transition-colors cursor-pointer"
+                className="mr-1.5 grid size-7 place-items-center rounded-full text-ink-faint hover:bg-paper hover:text-ink transition-colors cursor-pointer"
                 title="검색어 지우기"
               >
                 <X className="size-4" />
@@ -346,19 +394,11 @@ export default function App() {
             <div className="flex items-center gap-0.5 mr-1.5 text-ink-faint">
               <button
                 type="button"
-                onClick={() => openUrl("https://dic.dgedu.link")}
-                className="grid size-7 place-items-center rounded-full hover:bg-paper hover:text-brand-700 transition-colors cursor-pointer"
-                title="웹 사전 열기"
-              >
-                <ExternalLink className="size-3.5" />
-              </button>
-              <button
-                type="button"
                 onClick={() => getCurrentWindow().hide()}
-                className="grid size-7 place-items-center rounded-full hover:bg-paper hover:text-ink transition-colors cursor-pointer"
+                className="grid size-8 place-items-center rounded-full hover:bg-paper hover:text-ink transition-colors cursor-pointer"
                 title="트레이로 숨기기 (ESC)"
               >
-                <Minus className="size-3.5" />
+                <Minus className="size-4" />
               </button>
             </div>
 
@@ -369,7 +409,7 @@ export default function App() {
               disabled={loading}
               aria-label="낱말 찾기"
               style={{ backgroundColor: "#1f7af0", color: "#ffffff" }}
-              className="grid size-11 shrink-0 place-items-center rounded-full bg-[#1f7af0] text-white hover:bg-[#1763d0] active:scale-95 transition-all shadow-sm cursor-pointer disabled:opacity-50"
+              className="grid size-12 shrink-0 place-items-center rounded-full bg-[#1f7af0] text-white hover:bg-[#1763d0] active:scale-95 transition-all shadow-sm cursor-pointer disabled:opacity-50"
             >
               <Search className="size-5 text-white" aria-hidden />
             </button>
@@ -377,19 +417,19 @@ export default function App() {
 
           {/* 답이 없을 때 띄우는 플로팅 토스트 */}
           {toast && (
-            <div className="pointer-events-none absolute left-1/2 top-[76px] z-50 -translate-x-1/2 whitespace-nowrap rounded-full bg-ink/90 px-4 py-2 text-xs font-bold text-white shadow-xl backdrop-blur-sm animate-fade-in">
+            <div className="pointer-events-none absolute left-1/2 top-[80px] z-50 -translate-x-1/2 whitespace-nowrap rounded-full bg-ink/90 px-4 py-2 text-xs font-bold text-white shadow-xl backdrop-blur-sm animate-fade-in">
               {toast}
             </div>
           )}
 
-          {/* 자동완성 드롭다운 */}
+          {/* 추천 낱말 드롭다운 (잘림 방지 및 여유로운 하단 패딩) */}
           {suggestions.length > 0 && !loading && (
-            <div className="mt-1.5 overflow-hidden rounded-2xl border-2 border-brand-200 bg-white p-1.5 shadow-2xl animate-fade-in">
-              <div className="mb-1 flex items-center gap-1 px-2.5 py-0.5 text-xs font-bold text-brand-600">
-                <Sparkles className="size-3" />
-                <span>추천 낱말</span>
+            <div className="mt-2 max-h-[400px] overflow-y-auto rounded-3xl border-2 border-brand-200 bg-white p-2.5 shadow-2xl animate-fade-in">
+              <div className="mb-1.5 flex items-center gap-1 px-3 py-1 text-xs font-bold text-brand-600">
+                <Sparkles className="size-3.5" />
+                <span>추천 낱말 (Enter로 바로 보기)</span>
               </div>
-              <div className="space-y-0.5">
+              <div className="space-y-1">
                 {suggestions.map((item, idx) => {
                   const isSelected = idx === selectedIndex;
                   return (
@@ -397,12 +437,12 @@ export default function App() {
                       key={item}
                       onClick={() => submitSearch(item)}
                       onMouseEnter={() => setSelectedIndex(idx)}
-                      className={`flex w-full items-center justify-between rounded-xl px-3 py-2 text-left transition-colors cursor-pointer ${
+                      className={`flex w-full items-center justify-between rounded-2xl px-4 py-2.5 text-left transition-colors cursor-pointer ${
                         isSelected ? "bg-brand-50 text-brand-700 font-bold" : "text-ink hover:bg-paper"
                       }`}
                     >
                       <span className="text-base font-bold">{item}</span>
-                      <span className="text-xs text-brand-600 font-medium opacity-80">&rarr;</span>
+                      <span className="text-xs text-brand-600 font-semibold opacity-90">&rarr;</span>
                     </button>
                   );
                 })}
@@ -415,7 +455,7 @@ export default function App() {
   );
 }
 
-// 결과 전용 화면 컴포넌트
+// 결과 상세 화면 컴포넌트
 function DedicatedResultCard({
   entry,
   level,
@@ -423,7 +463,8 @@ function DedicatedResultCard({
   homoIndex,
   onHomoIndexChange,
   simplifying,
-  onOpenWeb,
+  onToggleFullscreen,
+  isFullscreen,
 }: {
   entry: DictHomograph extends never ? never : any;
   level: "dict" | "easy";
@@ -431,7 +472,8 @@ function DedicatedResultCard({
   homoIndex: number;
   onHomoIndexChange: (i: number) => void;
   simplifying: boolean;
-  onOpenWeb: () => void;
+  onToggleFullscreen: () => void;
+  isFullscreen: boolean;
 }) {
   const homographs: DictHomograph[] =
     entry.homographs && entry.homographs.length > 1
@@ -445,55 +487,54 @@ function DedicatedResultCard({
   const primary = senses[0];
   const rest = senses.slice(1);
 
-  const playAudio = () => {
-    if (active.audio?.url) {
-      new Audio(active.audio.url).play().catch(() => {});
-    }
+  const playVoice = () => {
+    speakWord(entry.word, active.audio?.url);
   };
 
   return (
-    <div className="space-y-3.5">
-      {/* 낱말 헤더: 표제어, 발음, 품사, 쉬운말 토글 */}
-      <div className="flex items-start justify-between gap-2 border-b border-line pb-2.5">
+    <div className="space-y-4">
+      {/* 낱말 헤더: 표제어, 소리 재생 버튼, 발음, 품사, 쉬운말 토글 */}
+      <div className="flex items-start justify-between gap-3 border-b border-line pb-3">
         <div>
-          <div className="flex items-center gap-2">
-            <h1 className="text-3xl font-extrabold tracking-tight text-ink">{entry.word}</h1>
-            {active.audio ? (
-              <button
-                type="button"
-                onClick={playAudio}
-                className="grid size-7 place-items-center rounded-full bg-brand-50 text-brand-600 hover:bg-brand-100 transition-colors cursor-pointer"
-                title="발음 듣기"
-              >
-                <Volume2 className="size-4" />
-              </button>
-            ) : null}
+          <div className="flex items-center gap-3">
+            <h1 className={`font-extrabold tracking-tight text-ink ${isFullscreen ? "text-5xl sm:text-6xl" : "text-3xl sm:text-4xl"}`}>
+              {entry.word}
+            </h1>
+            {/* 소리 듣기 버튼 (항상 제공) */}
+            <button
+              type="button"
+              onClick={playVoice}
+              className="grid size-10 place-items-center rounded-full bg-brand-50 text-brand-600 hover:bg-brand-100 hover:scale-105 active:scale-95 transition-all shadow-xs cursor-pointer border border-brand-200"
+              title="발음 및 소리 듣기"
+            >
+              <Volume2 className="size-5.5" />
+            </button>
           </div>
-          <div className="mt-1 flex items-center gap-1.5 text-xs font-semibold text-ink-faint">
+          <div className="mt-1.5 flex items-center gap-2 text-xs sm:text-sm font-semibold text-ink-faint">
             {entry.reading ? <span>[{entry.reading}]</span> : null}
-            {active.pos ? <span className="rounded-full bg-paper px-2 py-0.5 text-[11px]">{active.pos}</span> : null}
-            {active.level ? <span className="rounded-full bg-brand-50 px-2 py-0.5 text-[11px] text-brand-700">{active.level}</span> : null}
+            {active.pos ? <span className="rounded-full bg-paper px-2.5 py-0.5">{active.pos}</span> : null}
+            {active.level ? <span className="rounded-full bg-brand-50 px-2.5 py-0.5 text-brand-700">{active.level}</span> : null}
           </div>
         </div>
 
         {/* 쉬운 말로 / 사전 원문 토글 */}
-        <div className="flex items-center gap-0.5 rounded-full bg-paper p-0.5 border border-line">
+        <div className="flex items-center gap-1 rounded-full bg-paper p-1 border border-line">
           <button
             onClick={() => onLevelChange("dict")}
-            className={`flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-bold transition-colors cursor-pointer ${
+            className={`flex items-center gap-1 rounded-full px-3 py-1 text-xs sm:text-sm font-bold transition-colors cursor-pointer ${
               level === "dict" ? "bg-white text-brand-700 shadow-xs" : "text-ink-faint hover:text-ink"
             }`}
           >
-            <BookOpen className="size-2.5" />
+            <BookOpen className="size-3.5" />
             <span>원문</span>
           </button>
           <button
             onClick={() => onLevelChange("easy")}
-            className={`flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-bold transition-colors cursor-pointer ${
+            className={`flex items-center gap-1 rounded-full px-3 py-1 text-xs sm:text-sm font-bold transition-colors cursor-pointer ${
               level === "easy" ? "bg-white text-brand-700 shadow-xs" : "text-ink-faint hover:text-ink"
             }`}
           >
-            <Sparkles className="size-2.5" />
+            <Sparkles className="size-3.5" />
             <span>쉬운말</span>
           </button>
         </div>
@@ -501,21 +542,21 @@ function DedicatedResultCard({
 
       {/* 동음이의어 전환 탭 */}
       {homographs.length > 1 && (
-        <div className="flex flex-wrap gap-1">
+        <div className="flex flex-wrap gap-1.5">
           {homographs.map((h, i) => {
             const preview = h.senses[0]?.def ?? "";
-            const short = preview.length > 10 ? `${preview.slice(0, 10)}…` : preview;
+            const short = preview.length > 12 ? `${preview.slice(0, 12)}…` : preview;
             return (
               <button
                 key={i}
                 onClick={() => onHomoIndexChange(i)}
-                className={`rounded-full border px-2 py-0.5 text-xs font-semibold transition-colors cursor-pointer ${
+                className={`rounded-full border px-3 py-1 text-xs sm:text-sm font-semibold transition-colors cursor-pointer ${
                   i === safeIndex
                     ? "border-brand-500 bg-brand-50 text-brand-700 font-bold"
                     : "border-line bg-white text-ink-soft hover:bg-paper"
                 }`}
               >
-                <span className="mr-0.5 text-brand-600 font-bold">{i + 1}</span>
+                <span className="mr-1 text-brand-600 font-bold">{i + 1}</span>
                 {short}
               </button>
             );
@@ -523,20 +564,22 @@ function DedicatedResultCard({
         </div>
       )}
 
-      {/* 뜻풀이 영역 */}
-      <div className="space-y-2.5">
+      {/* 뜻풀이 및 사진 영역 (사진 높이 대폭 확대) */}
+      <div className="space-y-4">
         {level === "easy" && !usingEasy && simplifying ? (
           <p className="text-xs text-brand-600 font-medium animate-pulse">쉬운 말로 바꾸는 중…</p>
         ) : null}
 
         {primary && (
-          <p className="text-lg font-bold leading-relaxed text-ink">{primary.def}</p>
+          <p className={`font-extrabold leading-relaxed text-ink ${isFullscreen ? "text-3xl sm:text-4xl" : "text-2xl sm:text-3xl"}`}>
+            {primary.def}
+          </p>
         )}
 
         {primary?.example && (
-          <div className="rounded-xl border border-line bg-paper/80 p-3 text-sm">
-            <div className="flex items-start gap-1.5">
-              <span className="shrink-0 font-bold text-brand-700 text-xs mt-0.5">예문</span>
+          <div className="rounded-2xl border border-line bg-paper/80 p-4 text-base sm:text-lg">
+            <div className="flex items-start gap-2">
+              <span className="shrink-0 font-bold text-brand-700 text-sm mt-0.5">예문</span>
               <span className="text-ink-soft whitespace-pre-line leading-relaxed">
                 <HighlightWord text={primary.example} word={entry.word} />
               </span>
@@ -544,37 +587,38 @@ function DedicatedResultCard({
           </div>
         )}
 
+        {/* 큼직한 사진/삽화 영역 */}
         {active.image ? (
-          <div className="h-36 w-full overflow-hidden rounded-xl border border-line bg-paper">
-            <img src={active.image.url} alt={`${entry.word} 그림`} className="size-full object-contain" />
+          <div className={`w-full overflow-hidden rounded-3xl border border-line bg-paper/50 flex items-center justify-center ${isFullscreen ? "h-80 sm:h-96" : "h-64 sm:h-72"}`}>
+            <img src={active.image.url} alt={`${entry.word} 그림`} className="h-full w-full object-contain p-2" />
           </div>
         ) : null}
 
-        <div className="flex items-center justify-between pt-1">
-          <span className="text-[10px] text-ink-faint">
+        <div className="flex items-center justify-between pt-2">
+          <span className="text-xs text-ink-faint">
             {entry.source === "encykorea" ? "출처: 한국민족문화대백과사전" : "출처: 국립국어원 한국어기초사전"}
           </span>
           <button
-            onClick={onOpenWeb}
-            className="flex items-center gap-1 text-xs font-bold text-brand-600 hover:text-brand-700 cursor-pointer"
+            onClick={onToggleFullscreen}
+            className="flex items-center gap-1 text-xs sm:text-sm font-bold text-brand-600 hover:text-brand-700 cursor-pointer"
           >
-            <span>웹에서 크게</span>
-            <ExternalLink className="size-2.5" />
+            {isFullscreen ? <Minimize2 className="size-3.5" /> : <Maximize2 className="size-3.5" />}
+            <span>{isFullscreen ? "창 크기로 돌아가기" : "전체화면으로 보기 (F11)"}</span>
           </button>
         </div>
 
         {rest.length > 0 && (
-          <details className="mt-2 text-xs">
+          <details className="mt-2 text-xs sm:text-sm">
             <summary className="cursor-pointer font-bold text-brand-600">다른 뜻 더 보기 ({rest.length})</summary>
-            <ul className="mt-1.5 space-y-1.5">
+            <ul className="mt-2 space-y-2">
               {rest.map((s, idx) => (
-                <li key={idx} className="rounded-lg bg-paper p-2 text-ink-soft text-xs">
+                <li key={idx} className="rounded-xl bg-paper p-3 text-ink-soft text-sm sm:text-base">
                   <div className="font-medium text-ink">
                     <span className="font-bold mr-1">{idx + 2}.</span>
                     <span>{s.def}</span>
                   </div>
                   {s.example ? (
-                    <div className="mt-1 flex items-start gap-1 text-[11px] text-ink-soft">
+                    <div className="mt-1.5 flex items-start gap-1 text-xs sm:text-sm text-ink-soft">
                       <span className="shrink-0 font-semibold text-brand-600 mr-0.5">예:</span>
                       <span className="whitespace-pre-line leading-relaxed">
                         <HighlightWord text={s.example} word={entry.word} />
@@ -602,7 +646,7 @@ function HighlightWord({ text, word }: { text: string; word: string }) {
     <span>
       {parts.map((part, i) =>
         part === cleanWord ? (
-          <mark key={i} className="rounded-md bg-amber-100 text-amber-950 font-bold px-1 py-0.5 shadow-xs">
+          <mark key={i} className="rounded-md bg-amber-100 text-amber-950 font-bold px-1.5 py-0.5 shadow-xs">
             {part}
           </mark>
         ) : (

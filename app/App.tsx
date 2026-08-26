@@ -628,7 +628,8 @@ function MyWordsPage({
   useEffect(() => {
     const s = store.getSettings();
     setInterestedTopics(s.interestedTopics ?? DEFAULT_TOPICS);
-  }, []);
+  }, [customWordSets]);
+
 
   const toggleTopic = (id: string) => {
     setInterestedTopics((cur) => {

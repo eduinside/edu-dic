@@ -21,10 +21,10 @@ export const onRequestGet: PagesFunction<Env> = async (context) => {
     }
   }
 
-  // 2. D1 캐시 및 인기 낱말 수집
+  // 2. D1 캐시 및 인기 낱말 수집 (풀 1000개로 확대)
   const [cachedWords, popularWords] = await Promise.all([
-    getCachedWords(context.env, 500).catch(() => []),
-    getPopular(context.env, 30).catch(() => []),
+    getCachedWords(context.env, 1000).catch(() => []),
+    getPopular(context.env, 50).catch(() => []),
   ]);
 
   for (const w of cachedWords) curatedSet.add(w);
@@ -65,8 +65,9 @@ export const onRequestGet: PagesFunction<Env> = async (context) => {
     }
   }
 
-  // 중복 제거 및 상위 8개 추출
-  const combined = Array.from(new Set([...exactPrefix, ...choseongPrefix, ...contains])).slice(0, 8);
+  // 중복 제거 및 상위 최대 25개 추출 (10개~25개 사이로 컨텐츠 매칭에 따라 유연하게 제공)
+  const combined = Array.from(new Set([...exactPrefix, ...choseongPrefix, ...contains])).slice(0, 25);
+
 
   return jsonResponse({
     query: q,
@@ -74,3 +75,4 @@ export const onRequestGet: PagesFunction<Env> = async (context) => {
     suggestions: combined,
   });
 };
+

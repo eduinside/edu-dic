@@ -40,18 +40,22 @@ const MYWORDS_PATH = "my"; // "나의 낱말사전" 전용 URL(D27) — 검색�
 
 // 주소 경로를 해석한다. /my 는 예약 경로(D27), 그 외 비어있지 않은 경로는 검색어(/나비, D18).
 // 과거에 공유된 ?q= 링크도 계속 동작하도록 폴백으로 남겨 둔다.
-type RouteInfo = { kind: "mywords"; tab: MyWordsTab | null } | { kind: "word"; word: string } | { kind: "home" };
+type RouteInfo = { kind: "mywords"; tab: MyWordsTab | null } | { kind: "word"; word: string; homograph?: number } | { kind: "home" };
 function routeFromLocation(): RouteInfo {
   const path = decodeURIComponent(window.location.pathname.replace(/^\/+/, "")).trim();
+  const hash = window.location.hash.replace(/^#/, "").trim();
+  const homograph = hash && !isNaN(Number(hash)) && Number(hash) >= 1 ? parseInt(hash, 10) - 1 : undefined;
+
   if (path === MYWORDS_PATH) {
     const tab = new URLSearchParams(window.location.search).get("tab") as MyWordsTab | null;
     return { kind: "mywords", tab: tab && ["recent", "myPopular", "favorite"].includes(tab) ? tab : null };
   }
-  if (path) return { kind: "word", word: path };
+  if (path) return { kind: "word", word: path, homograph };
   const q = new URLSearchParams(window.location.search).get("q")?.trim();
-  if (q) return { kind: "word", word: q };
+  if (q) return { kind: "word", word: q, homograph };
   return { kind: "home" };
 }
+
 
 type Page = "home" | "mywords";
 type MyWordsTab = "recent" | "myPopular" | "favorite";
@@ -118,10 +122,11 @@ export default function App() {
     [showToast],
   );
 
-  const search = useCallback(async (w: string, opts: { pushUrl?: boolean } = {}) => {
+  const search = useCallback(async (w: string, opts: { pushUrl?: boolean; homograph?: number } = {}) => {
     const q = w.trim();
     if (!q) return;
-    const { pushUrl = true } = opts;
+    const { pushUrl = true, homograph } = opts;
+    const initialHomo = typeof homograph === "number" && homograph >= 0 ? homograph : 0;
     const seq = ++requestSeq.current;
     setPage("home");
     setWord(q);
@@ -129,9 +134,10 @@ export default function App() {
     setLongLoading(false);
     setResult(null);
     setAiRelated([]);
-    setHomoIndex(0);
+    setHomoIndex(initialHomo);
     if (pushUrl) {
-      window.history.pushState({ q }, "", `/${encodeURIComponent(q)}`);
+      const hashStr = initialHomo > 0 ? `#${initialHomo + 1}` : "";
+      window.history.pushState({ q }, "", `/${encodeURIComponent(q)}${hashStr}`);
     }
     // 캐시 HIT는 순식간이라 이 문구가 안 보인다 — 처음 찾는 낱말(krdict 실호출)일 때만 뒤늦게 뜬다.
     const longTimer = setTimeout(() => {
@@ -145,11 +151,24 @@ export default function App() {
     setLongLoading(false);
     // 답을 찾은 낱말만 "내가 찾은/자주 찾은"에 남긴다 — 오타·미수록 낱말이 기록에 끼면 안 됨.
     if (r.status === "ok") {
+      if (r.entry.homographs && r.entry.homographs.length > 0) {
+        if (initialHomo >= r.entry.homographs.length) {
+          setHomoIndex(0);
+        }
+      }
       setRecent(store.pushRecent(q));
       store.bumpSearchCount(q);
       setMyPopular(store.getMostSearched());
     }
   }, []);
+
+  const handleHomoIndexChange = useCallback((i: number) => {
+    setHomoIndex(i);
+    const hashStr = i > 0 ? `#${i + 1}` : "";
+    const currentPath = window.location.pathname;
+    window.history.replaceState(null, "", `${currentPath}${hashStr}`);
+  }, []);
+
 
   const goHome = useCallback((pushUrl = true) => {
     requestSeq.current++; // 진행 중이던 요청 결과를 무효화
@@ -234,17 +253,31 @@ export default function App() {
 
 
     const applyRoute = (r: RouteInfo) => {
-      if (r.kind === "word") search(r.word, { pushUrl: false });
+      if (r.kind === "word") search(r.word, { pushUrl: false, homograph: r.homograph });
       else if (r.kind === "mywords") openMyWords(r.tab ?? "recent", false);
       else goHome(false);
     };
     applyRoute(routeFromLocation());
 
     const onPopState = () => applyRoute(routeFromLocation());
+    const onHashChange = () => {
+      const hash = window.location.hash.replace(/^#/, "").trim();
+      if (hash && !isNaN(Number(hash))) {
+        const idx = parseInt(hash, 10) - 1;
+        if (idx >= 0) setHomoIndex(idx);
+      } else if (!hash) {
+        setHomoIndex(0);
+      }
+    };
     window.addEventListener("popstate", onPopState);
-    return () => window.removeEventListener("popstate", onPopState);
+    window.addEventListener("hashchange", onHashChange);
+    return () => {
+      window.removeEventListener("popstate", onPopState);
+      window.removeEventListener("hashchange", onHashChange);
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
 
   // "쉬운 말로" 토글 + 지금 보고 있는 동음이의어(homoIndex)에 아직 변환본이 없으면 자동으로 가져온다
   // (D17-2, D25 — 동음이의어 탭을 바꿔도 그 탭 전용으로 다시 변환해야 "쉬운 말로"가 항상 맞게 동작한다).
@@ -450,8 +483,9 @@ export default function App() {
               simplifying={simplifying}
               onSuggestionPick={search}
               homoIndex={homoIndex}
-              onHomoIndexChange={setHomoIndex}
+              onHomoIndexChange={handleHomoIndexChange}
             />
+
             {related ? (
               <div className="mt-6">
                 <WordChips title={`${related.title} 낱말 더 보기`} emoji={related.emoji} words={related.words} onPick={search} />

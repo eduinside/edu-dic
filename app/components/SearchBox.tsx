@@ -156,14 +156,17 @@ export default function SearchBox({ onSearch, initial = "", big = false, autoFoc
         </div>
       </form>
 
-      {/* 자동완성 드롭다운 */}
+      {/* 자동완성 드롭다운 (10~20개 유연 지원) */}
       {isOpen && suggestions.length > 0 && (
         <div className="absolute left-0 right-0 top-full z-40 mt-2 overflow-hidden rounded-2xl border border-brand-200 bg-white/95 backdrop-blur-md p-2 shadow-2xl animate-fade-in">
-          <div className="mb-1 flex items-center gap-1.5 px-3 py-1 text-xs font-bold text-brand-600">
-            <Sparkles className="size-3.5" aria-hidden />
-            <span>추천 낱말</span>
+          <div className="mb-1 flex items-center justify-between px-3 py-1 text-xs font-bold text-brand-600 border-b border-line/40 pb-1.5">
+            <div className="flex items-center gap-1.5">
+              <Sparkles className="size-3.5" aria-hidden />
+              <span>추천 낱말 ({suggestions.length})</span>
+            </div>
+            <span className="text-[11px] text-ink-faint font-normal">Enter로 바로 보기</span>
           </div>
-          <ul role="listbox" className="space-y-1">
+          <ul role="listbox" className="space-y-1 max-h-[360px] sm:max-h-[440px] overflow-y-auto overscroll-contain pr-1">
             {suggestions.map((item, idx) => {
               const isSelected = idx === selectedIndex;
               return (
@@ -178,13 +181,14 @@ export default function SearchBox({ onSearch, initial = "", big = false, autoFoc
                   } ${big ? "text-lg" : "text-base"}`}
                 >
                   <span>{item}</span>
-                  <span className="text-xs font-semibold text-ink-faint opacity-60">사전 바로가기</span>
+                  <span className="text-xs font-semibold text-ink-faint opacity-60">&rarr;</span>
                 </li>
               );
             })}
           </ul>
         </div>
       )}
+
     </div>
   );
 }

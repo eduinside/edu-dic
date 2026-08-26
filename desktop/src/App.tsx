@@ -300,11 +300,14 @@ export default function App() {
 
   function openCurrentInBrowser() {
     if (result && result.status === "ok") {
-      openUrl(`https://dic.dgedu.link/${encodeURIComponent(result.entry.word)}`);
+      const homographs = result.entry.homographs;
+      const hashStr = homographs && homographs.length > 1 ? `#${homoIndex + 1}` : "";
+      openUrl(`https://dic.dgedu.link/${encodeURIComponent(result.entry.word)}${hashStr}`);
     } else {
       openUrl("https://dic.dgedu.link");
     }
   }
+
 
   return (
     <div className={`select-none ${isFullscreen ? "fixed inset-0 z-50 h-screen w-screen bg-white p-6 sm:p-12 overflow-y-auto" : "relative flex h-full w-full flex-col justify-start p-2 bg-transparent"}`}>
@@ -445,7 +448,8 @@ export default function App() {
                 <Sparkles className="size-3.5" />
                 <span>추천 낱말 (Enter로 바로 보기)</span>
               </div>
-              <div className="space-y-1">
+              <div className="space-y-1 max-h-[440px] overflow-y-auto pr-1">
+
                 {suggestions.map((item, idx) => {
                   const isSelected = idx === selectedIndex;
                   return (

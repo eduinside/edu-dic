@@ -47,7 +47,8 @@ export const onRequestGet: PagesFunction<Env> = async ({ request, env, waitUntil
       "너는 초등학교 1~2학년 학생에게 낱말 뜻을 설명해 주는 선생님이야. 아래 국어사전 뜻풀이와 예문을 " +
       "그 학생이 실제로 알아들을 수 있도록 쉬운 개념의 뜻풀이와 학교/일상 상황의 쉬운 예문으로 다시 작성해.\n" +
       "규칙:\n" +
-      "(1) 뜻풀이(def): 초등 저학년 눈높이로 완전히 풀어서 설명(한자어·전문용어 배제). 끝은 '~하는 것.', '~한 도구.'처럼 명사형으로 마침.\n" +
+      "(1) 뜻풀이(def): 초등 저학년 눈높이로 쉽게 설명하되, 반드시 사전 정의처럼 간결한 명사구(체언) 형태로 끝맺을 것 (예: '아직 어린 소.', '바람을 일으키는 기계.', '책을 읽는 곳.').\n" +
+      "★ 금지: '~를 말하는 거야', '~를 뜻하는 거야', '~를 말해요', '~예요', '~하는 것을 의미해' 같은 불필요한 지시형/구어체/설명형 어미는 절대 쓰지 마.\n" +
       "(2) 예문(example): 어린이가 집이나 학교에서 직접 말하거나 겪을 법한 친근하고 쉬운 1문장. 해당 낱말이 반드시 포함되어야 함.\n" +
       "(3) 입력 항목 개수와 순서를 정확히 유지하여 반드시 다음 JSON 배열 형식으로만 출력:\n" +
       `[{"def": "쉬운 뜻풀이", "example": "어린이 쉬운 예문"}]`,
@@ -71,6 +72,19 @@ export const onRequestGet: PagesFunction<Env> = async ({ request, env, waitUntil
   return json({ status: "ok", easySenses });
 };
 
+// 지시형/구어체 종결어미('~를 말하는 거야', '~를 뜻해요' 등)를 제거하고 명사형 종결 유지
+function cleanEasyDef(def: string): string {
+  let text = def.trim();
+  text = text
+    .replace(/\s*(?:을|를)?\s*(?:말하는\s*거야|뜻하는\s*거야|말해요|뜻해요|말한다|뜻한다|의미해요|의미한다|가리켜요|가리킨다)[.!]?$/g, "")
+    .replace(/\s*(?:이야|야|에요|예요|입니다|이다)[.!]?$/g, "")
+    .trim();
+  if (text && !text.endsWith(".")) {
+    text += ".";
+  }
+  return text;
+}
+
 // JSON 배열 또는 텍스트 폴백으로 DictSense 배열 파싱
 function parseEasySenses(raw: string, original: DictSense[]): DictSense[] | null {
   try {
@@ -78,7 +92,7 @@ function parseEasySenses(raw: string, original: DictSense[]): DictSense[] | null
     const parsed = JSON.parse(clean) as { def?: string; example?: string }[];
     if (Array.isArray(parsed) && parsed.length === original.length) {
       return parsed.map((item, i) => ({
-        def: (item.def ?? "").trim() || original[i].def,
+        def: cleanEasyDef(item.def ?? "") || original[i].def,
         example: (item.example ?? "").trim() || original[i].example,
       }));
     }
@@ -89,7 +103,10 @@ function parseEasySenses(raw: string, original: DictSense[]): DictSense[] | null
       .map((s) => s.trim())
       .filter((s) => s.length > 0);
     if (items.length === original.length) {
-      return items.map((def, i) => ({ def, example: original[i]?.example }));
+      return items.map((def, i) => ({
+        def: cleanEasyDef(def) || original[i].def,
+        example: original[i]?.example,
+      }));
     }
   }
   return null;

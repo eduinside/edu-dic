@@ -37,13 +37,14 @@ import type { CustomWordSet, DictSense, LookupResult, ReadingLevel } from "./typ
 
 const LANDING_PREVIEW_MAX = 5; // 랜딩 4열 각각 최대 개수(D23)
 
-// 낱말 익히기 기본 노출 주제 4개(24절기, 학교생활 필수 + 나머지 세트 중 랜덤 2개)
+// 낱말 익히기 기본 노출 주제 4개(랜덤 2개 먼저 노출, 학교생활과 24절기는 아래로)
 function getRandomDefaultTopics(): string[] {
-  const fixed = ["solar-terms", "school-life"];
+  const fixed = ["school-life", "solar-terms"];
   const others = WORD_SETS.map((s) => s.id).filter((id) => !fixed.includes(id));
   const shuffled = [...others].sort(() => Math.random() - 0.5);
-  return [...fixed, ...shuffled.slice(0, 2)];
+  return [...shuffled.slice(0, 2), "school-life", "solar-terms"];
 }
+
 
 
 const MYWORDS_PATH = "my"; // "나의 낱말사전" 전용 URL(D27) — 검색어 경로(/나비)와 겹치지 않게 예약.
@@ -733,7 +734,10 @@ function MyWordsPage({
   const current = listFor[tab];
 
   const allTopics: WordSet[] = [...customWordSets, ...WORD_SETS];
-  const visibleTopics = allTopics.filter((s) => interestedTopics.includes(s.id));
+  const visibleTopics = interestedTopics
+    .map((id) => allTopics.find((s) => s.id === id))
+    .filter(Boolean) as WordSet[];
+
 
   return (
     <main className="mx-auto max-w-5xl px-4 py-8">

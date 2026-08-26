@@ -35,7 +35,16 @@ import * as store from "./lib/storage.ts";
 import type { CustomWordSet, DictSense, LookupResult, ReadingLevel } from "./types.ts";
 
 const LANDING_PREVIEW_MAX = 5; // 랜딩 4열 각각 최대 개수(D23)
-const DEFAULT_TOPICS = ["nature-season", "school-life", "feelings-emotions"]; // 낱말 익히기 기본 노출 주제 3개
+
+// 낱말 익히기 기본 노출 주제 4개(24절기, 학교생활 필수 + 나머지 세트 중 랜덤 2개)
+function getRandomDefaultTopics(): string[] {
+  const fixed = ["solar-terms", "school-life"];
+  const others = WORD_SETS.map((s) => s.id).filter((id) => !fixed.includes(id));
+  const shuffled = [...others].sort(() => Math.random() - 0.5);
+  return [...fixed, ...shuffled.slice(0, 2)];
+}
+
+
 const MYWORDS_PATH = "my"; // "나의 낱말사전" 전용 URL(D27) — 검색어 경로(/나비)와 겹치지 않게 예약.
 
 // 주소 경로를 해석한다. /my 는 예약 경로(D27), 그 외 비어있지 않은 경로는 검색어(/나비, D18).
@@ -223,8 +232,9 @@ export default function App() {
         const curSettings = store.getSettings();
         const nextTopics = curSettings.interestedTopics
           ? [newSet.id, ...curSettings.interestedTopics.filter((t) => t !== newSet.id)]
-          : [newSet.id, ...DEFAULT_TOPICS];
+          : [newSet.id, ...getRandomDefaultTopics()];
         store.setSettings({ interestedTopics: nextTopics });
+
 
         setHighlightedTopicId(newSet.id);
         setTimeout(() => setHighlightedTopicId(null), 3000);
@@ -685,12 +695,13 @@ function MyWordsPage({
 }) {
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [createOpen, setCreateOpen] = useState(false);
-  const [interestedTopics, setInterestedTopics] = useState<string[]>(DEFAULT_TOPICS);
+  const [interestedTopics, setInterestedTopics] = useState<string[]>(getRandomDefaultTopics);
 
   useEffect(() => {
     const s = store.getSettings();
-    setInterestedTopics(s.interestedTopics ?? DEFAULT_TOPICS);
+    setInterestedTopics(s.interestedTopics ?? getRandomDefaultTopics());
   }, [customWordSets]);
+
 
 
   const toggleTopic = (id: string) => {
@@ -1149,8 +1160,9 @@ function TopicCard({
   onDelete?: () => void;
 }) {
   const [open, setOpen] = useState(false);
-  const preview = set.words.slice(0, 6);
+  const preview = set.words.slice(0, 5);
   const shown = open ? set.words : preview;
+
 
   const cardClasses = highlighted
     ? "rounded-2xl border-2 border-brand-500 bg-brand-50/70 p-4 shadow-md ring-4 ring-brand-200/60 transition-all duration-500 animate-pulse"

@@ -33,6 +33,16 @@ CREATE TABLE IF NOT EXISTS edudic_shares (
 
 CREATE INDEX IF NOT EXISTS idx_edudic_shares_created_at ON edudic_shares (created_at);
 
+-- 차단/배제된 이미지 URL 테이블 (네이버 웹 이미지 교체 및 영구 배제용)
+CREATE TABLE IF NOT EXISTS edudic_blocked_images (
+  url        TEXT PRIMARY KEY,
+  word       TEXT NOT NULL,
+  created_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
+CREATE INDEX IF NOT EXISTS idx_edudic_blocked_images_word ON edudic_blocked_images (word);
+
 -- (선택) 오래된 버킷 정리는 주기 작업으로:
 --   DELETE FROM edudic_popular_daily WHERE day < date('now','-30 day');
+
 

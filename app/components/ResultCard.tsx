@@ -1,4 +1,5 @@
-import { Star, Loader2, Volume2 } from "lucide-react";
+import { useState } from "react";
+import { Star, Loader2, Volume2, RefreshCw, EyeOff } from "lucide-react";
 import type { DictAudio, DictHomograph, DictImage, DictSense, LookupResult } from "../types.ts";
 
 interface Props {
@@ -14,7 +15,9 @@ interface Props {
   homoIndex: number; // 지금 보고 있는 동음이의어(D22). App.tsx가 관리(D25 — "쉬운 말로"가 탭별로 동작하려면
   // 어느 동음이의어를 보는 중인지 상위(App.tsx)의 simplify 호출 로직도 알아야 해서 여기로 끌어올렸다).
   onHomoIndexChange: (i: number) => void;
+  onImageAction?: (action: "next" | "hide", currentUrl: string) => Promise<void>;
 }
+
 
 // 검색 결과: 대형 낱말 + 대표 뜻 + 이미지 1장. 낱말·뜻·이미지가 "한 번에" 보이도록 자리를 미리 잡는다.
 // 큰 화면(발표) 모드에서는 일반 모니터 기준 화면 높이의 약 70%를 차지하도록 키운다.
@@ -30,7 +33,9 @@ export default function ResultCard({
   onSuggestionPick,
   homoIndex,
   onHomoIndexChange,
+  onImageAction,
 }: Props) {
+
   if (loading) {
     return (
       <div className="flex flex-col items-center justify-center gap-3 py-20 text-ink-faint">
@@ -302,23 +307,78 @@ function AudioButton({ audio, big }: { audio: DictAudio; big: boolean }) {
 
 // 좁은 화면(모바일)에서는 카드 전체 폭을 그대로 쓰고, sm 이상에서만 옆 칸 고정 크기로 전환한다.
 // object-contain으로 원본 비율을 그대로 두어(크롭 없음) 삽화의 일부가 잘려 나가지 않게 한다.
-function ResultImage({ image, word, big }: { image?: DictImage | null; word: string; big: boolean }) {
+function ResultImage({
+  image,
+  word,
+  big,
+  onImageAction,
+}: {
+  image?: DictImage | null;
+  word: string;
+  big: boolean;
+  onImageAction?: (action: "next" | "hide", currentUrl: string) => Promise<void>;
+}) {
+  const [loading, setLoading] = useState(false);
   const sizeAtSm = big ? "sm:size-80 lg:size-[26rem]" : "sm:size-56 lg:size-64";
-  // krdict·encykorea·네이버 모두 이미지가 없으면(동음이의어의 일반적인 뜻 등) 자리를 아예 비운다 —
-  // 가짜 이니셜 타일을 채우지 않는다. 텍스트 열이 grid에서 자연스럽게 폭을 넓혀 채운다.
   if (!image) return null;
+
+  const handleAction = async (action: "next" | "hide") => {
+    if (!onImageAction || loading) return;
+    setLoading(true);
+    try {
+      await onImageAction(action, image.url);
+    } finally {
+      setLoading(false);
+    }
+  };
+
   return (
     <figure className={`w-full aspect-square shrink-0 ${sizeAtSm}`}>
-      <img
-        src={image.url}
-        alt={`${word} 그림`}
-        className="size-full rounded-2xl bg-paper object-contain"
-        loading="eager"
-      />
-      <figcaption className="mt-1 text-right text-[11px] text-ink-faint">
-        {image.attribution}
-        {image.source === "naver" ? <span className="ml-1 text-ink-faint/70">· 사진 검색 결과</span> : null}
-      </figcaption>
+      <div className="relative size-full overflow-hidden rounded-2xl bg-paper">
+        <img
+          src={image.url}
+          alt={`${word} 그림`}
+          className="size-full object-contain"
+          loading="eager"
+        />
+        {loading ? (
+          <div className="absolute inset-0 flex items-center justify-center bg-white/70 backdrop-blur-xs">
+            <Loader2 className="size-6 animate-spin text-brand-600" />
+          </div>
+        ) : null}
+      </div>
+      <div className="mt-1.5 flex flex-wrap items-center justify-between gap-1 text-[11px] text-ink-faint">
+        <figcaption>
+          {image.attribution}
+          {image.source === "naver" ? <span className="ml-1 text-ink-faint/70">· 사진 검색</span> : null}
+        </figcaption>
+
+        {image.source === "naver" && onImageAction ? (
+          <div className="flex items-center gap-1">
+            <button
+              type="button"
+              onClick={() => handleAction("next")}
+              disabled={loading}
+              className="inline-flex items-center gap-1 rounded-md bg-paper px-2 py-0.5 font-semibold text-ink-soft hover:bg-brand-50 hover:text-brand-700 transition-colors border border-line/60 shadow-2xs"
+              title="다른 웹 사진으로 바꾸기"
+            >
+              <RefreshCw className={`size-3 ${loading ? "animate-spin" : ""}`} />
+              <span>다른 사진</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => handleAction("hide")}
+              disabled={loading}
+              className="inline-flex items-center gap-1 rounded-md bg-paper px-2 py-0.5 font-semibold text-ink-soft hover:bg-red-50 hover:text-red-600 transition-colors border border-line/60 shadow-2xs"
+              title="이 사진 숨기기"
+            >
+              <EyeOff className="size-3" />
+              <span>숨기기</span>
+            </button>
+          </div>
+        ) : null}
+      </div>
     </figure>
   );
 }
+

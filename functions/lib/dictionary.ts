@@ -16,15 +16,18 @@ import type { Env } from "../_shared.ts";
 import { searchEncykorea } from "./encykorea.ts";
 import { fetchDictEntry } from "./krdict.ts";
 import { searchNaverImage } from "./naver.ts";
+import { blockImage, getBlockedImages } from "./image-block.ts";
 import { getCachedEntry, putCachedEntry } from "./store.ts";
 import { homographImageQuery, imageSearchQuery } from "./textutil.ts";
 
-async function naverFallback(env: Env, query: string | null): Promise<DictImage | null> {
+
+async function naverFallback(env: Env, query: string | null, word: string): Promise<DictImage | null> {
   if (!query) return null;
   const naverId = env["X-NCP-APIGW-API-KEY-ID"];
   const naverKey = env["X-NCP-APIGW-API-KEY"];
   if (!naverId || !naverKey) return null;
-  return searchNaverImage(naverId, naverKey, query).catch(() => null);
+  const blocked = await getBlockedImages(env.DB, word);
+  return searchNaverImage(naverId, naverKey, query, blocked).catch(() => null);
 }
 
 // 대표(단일 또는 0번) 항목 — encykorea·네이버를 순차 대기하지 않고 동시에 조회해 지연을 줄인다
@@ -32,15 +35,16 @@ async function naverFallback(env: Env, query: string | null): Promise<DictImage 
 async function fillPrimaryImage(env: Env, word: string, def: string | undefined): Promise<DictImage | null> {
   const [ency, naver] = await Promise.all([
     env.ENCYKOREA_API_KEY ? searchEncykorea(env.ENCYKOREA_API_KEY, word).catch(() => null) : Promise.resolve(null),
-    naverFallback(env, imageSearchQuery(word, def)),
+    naverFallback(env, imageSearchQuery(word, def), word),
   ]);
   return ency?.image ?? naver;
 }
 
 // 대표가 아닌 동음이의어 — encykorea는 뜻을 구분 못 하니 건너뛰고 네이버(힌트 필수)만 시도.
 async function fillHomographImage(env: Env, word: string, def: string | undefined): Promise<DictImage | null> {
-  return naverFallback(env, homographImageQuery(word, def));
+  return naverFallback(env, homographImageQuery(word, def), word);
 }
+
 
 // waitUntil을 넘기면 D1 캐시 저장을 응답 반환 뒤로 미룬다(Pages Functions의 EventContext.waitUntil).
 // 저장 자체도 응답 지연에 들어가던 것을 빼서 첫 조회 체감 속도를 줄인다 — 멱등 upsert라 안전.

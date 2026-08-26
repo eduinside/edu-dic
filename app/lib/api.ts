@@ -133,3 +133,24 @@ export async function fetchSuggestions(query: string): Promise<string[]> {
   }
 }
 
+// 네이버 웹 이미지 교체(다음 순위) 또는 영구 차단/숨김 요청
+export async function requestImageAction(
+  word: string,
+  currentUrl: string,
+  action: "next" | "hide",
+  homoIndex = 0,
+): Promise<{ success: boolean; image: DictImage | null }> {
+  try {
+    const res = await fetch("/api/image-action", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ word, currentUrl, action, homoIndex }),
+    });
+    if (!res.ok) return { success: false, image: null };
+    return (await res.json()) as { success: boolean; image: DictImage | null };
+  } catch {
+    return { success: false, image: null };
+  }
+}
+
+

@@ -14,8 +14,13 @@ interface NaverImageItem {
   title?: string;
 }
 
-export async function searchNaverImage(clientId: string, clientSecret: string, query: string): Promise<DictImage | null> {
-  const url = `${ENDPOINT}?query=${encodeURIComponent(query)}&display=1&sort=sim`;
+export async function searchNaverImage(
+  clientId: string,
+  clientSecret: string,
+  query: string,
+  blockedUrls: string[] = [],
+): Promise<DictImage | null> {
+  const url = `${ENDPOINT}?query=${encodeURIComponent(query)}&display=10&sort=sim`;
   const res = await fetch(url, {
     headers: {
       "X-NCP-APIGW-API-KEY-ID": clientId,
@@ -25,12 +30,16 @@ export async function searchNaverImage(clientId: string, clientSecret: string, q
   if (!res.ok) return null;
 
   const data = (await res.json()) as { items?: NaverImageItem[] };
-  const item = data.items?.[0];
-  if (!item) return null;
+  const items = data.items || [];
 
-  const src = item.thumbnail || item.link;
-  if (!src) return null;
+  const validItem = items.find((item) => {
+    const src = item.thumbnail || item.link;
+    return src && !blockedUrls.includes(src);
+  });
 
+  if (!validItem) return null;
+
+  const src = validItem.thumbnail || validItem.link;
   return {
     url: src,
     license: "네이버 이미지 검색",
@@ -38,6 +47,7 @@ export async function searchNaverImage(clientId: string, clientSecret: string, q
     source: "naver",
   };
 }
+
 
 // 네이버 오타 변환(NCP API Hub) — 사전 미수록어의 오타 교정에 사용(D29, AI 대신 이 공식 API로 교체).
 // https://api.ncloud-docs.com/docs/naver-api-hub-search-errata — 이미지 검색과 같은 키·쿼터(25,000회/일) 공유.

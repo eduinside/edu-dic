@@ -30,7 +30,9 @@ import {
   fetchRelated,
   fetchTopicWords,
   lookupWord,
+  requestImageAction,
 } from "./lib/api.ts";
+
 import { relatedWords, WORD_SETS, type WordSet } from "./lib/words.ts";
 import * as store from "./lib/storage.ts";
 import type { CustomWordSet, DictSense, LookupResult, ReadingLevel } from "./types.ts";
@@ -183,6 +185,40 @@ export default function App() {
     const currentPath = window.location.pathname;
     window.history.replaceState(null, "", `${currentPath}${hashStr}`);
   }, []);
+
+  const handleImageAction = useCallback(
+    async (action: "next" | "hide", currentUrl: string) => {
+      if (!result || result.status !== "ok" || !word) return;
+      const res = await requestImageAction(word, currentUrl, action, homoIndex);
+      if (res.success) {
+        setResult((prev) => {
+          if (!prev || prev.status !== "ok") return prev;
+          const nextEntry = { ...prev.entry };
+          if (nextEntry.homographs && nextEntry.homographs.length > 1) {
+            const hgs = [...nextEntry.homographs];
+            hgs[homoIndex] = { ...hgs[homoIndex], image: res.image };
+            nextEntry.homographs = hgs;
+            if (homoIndex === 0) nextEntry.image = res.image;
+          } else {
+            nextEntry.image = res.image;
+          }
+          return { ...prev, entry: nextEntry };
+        });
+
+        if (action === "hide") {
+          showToast("사진을 숨겼어요.");
+        } else if (res.image) {
+          showToast("다른 사진으로 바꿨어요!");
+        } else {
+          showToast("더 이상 적절한 사진이 없어 사진을 숨겼어요.");
+        }
+      } else {
+        showToast("사진을 바꾸지 못했어요.");
+      }
+    },
+    [result, word, homoIndex, showToast],
+  );
+
 
 
   const goHome = useCallback((pushUrl = true) => {
@@ -506,7 +542,9 @@ export default function App() {
               onSuggestionPick={search}
               homoIndex={homoIndex}
               onHomoIndexChange={handleHomoIndexChange}
+              onImageAction={handleImageAction}
             />
+
 
             {/* 1. 내가 만든 주제 또는 기본 세트에 속한 경우 */}
             {related ? (

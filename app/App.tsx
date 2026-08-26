@@ -539,8 +539,10 @@ export default function App() {
           recent={recent}
           popular={popular}
           favorites={favorites}
+          customWordSets={customWordSets}
           onGoto={() => openMyWords("recent")}
         />
+
       )}
     </div>
   );
@@ -578,15 +580,22 @@ function HomeView({
   recent,
   popular,
   favorites,
+  customWordSets = [],
   onGoto,
 }: {
   onSearch: (w: string) => void;
   recent: string[];
   popular: string[];
   favorites: string[];
+  customWordSets?: CustomWordSet[];
   onGoto: () => void;
 }) {
-  const recommended = WORD_SETS[0]?.words.slice(0, LANDING_PREVIEW_MAX) ?? [];
+  const recommended = useMemo(() => {
+    const allPool = Array.from(new Set([...customWordSets, ...WORD_SETS].flatMap((s) => s.words)));
+    const shuffled = [...allPool].sort(() => Math.random() - 0.5);
+    return shuffled.slice(0, LANDING_PREVIEW_MAX);
+  }, [customWordSets]);
+
   return (
     <main className="min-h-[calc(100vh-3.5rem)] flex flex-col justify-between px-4">
       <div>

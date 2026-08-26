@@ -141,7 +141,8 @@ export default function SearchBox({ onSearch, initial = "", big = false, autoFoc
             inputMode="text"
             enterKeyHint="search"
             autoComplete="off"
-            placeholder={big ? "궁금한 낱말이나 초성을 적어보세요 (예: ㄱㅇ, 바다)" : "궁금한 낱말이나 초성을 적어보세요"}
+            placeholder="궁금한 낱말이나 초성을 적어보세요"
+
             aria-label="낱말 검색"
             aria-expanded={isOpen}
             aria-autocomplete="list"

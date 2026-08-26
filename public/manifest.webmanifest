@@ -1,0 +1,13 @@
+{
+  "name": "어린이 쉬운 사전",
+  "short_name": "쉬운사전",
+  "description": "어려운 낱말을 입력하면 쉬운 뜻풀이와 그림을 큰 화면으로 보여 주는 어린이 사전",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#ffffff",
+  "theme_color": "#1f7af0",
+  "icons": [
+    { "src": "/logo-192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "/logo-512.png", "sizes": "512x512", "type": "image/png" }
+  ]
+}

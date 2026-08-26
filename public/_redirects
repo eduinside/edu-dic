@@ -1,0 +1,4 @@
+# SPA 폴백 — /나비 같은 경로 기반 공유 URL(계획서 D18)이 정적 자산에 없어도
+# index.html로 넘겨 클라이언트 라우팅(App.tsx의 History API)이 처리하게 한다.
+# /api/* 는 Pages Functions가 이 파일보다 먼저 처리하므로 영향 없음.
+/*    /index.html   200

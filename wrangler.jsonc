@@ -1,0 +1,24 @@
+{
+  // 어린이 쉬운 사전 — Cloudflare Pages (정적 + Functions).
+  // D1은 신규 생성하지 않고 공유 'edu-link-db' 사용(계획서 D12). 테이블은 edudic_ 접두어(db/schema.sql).
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "edu-dic",
+  "compatibility_date": "2026-05-25",
+  "compatibility_flags": ["nodejs_compat"],
+  "pages_build_output_dir": "./dist",
+
+  // 공유 D1 (D12) — edu-link/edu-kit와 동일 DB. 테이블만 edudic_ 접두어로 분리.
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "edu-link-db",
+      "database_id": "e5fa6f54-6063-48f9-9cf3-0517381dd005"
+    }
+  ]
+
+  // 비밀값(KRDICT_API_KEY, ENCYKOREA_API_KEY, X-NCP-APIGW-API-KEY-ID/KEY, TIMELY_API_KEY 등)은
+  // 코드/설정에 넣지 않는다:
+  //   - 로컬:  .dev.vars 파일(gitignore됨)
+  //   - 운영:  wrangler pages secret put <이름>  또는 CF 대시보드 환경변수
+  // Preview 환경은 프로덕션 edu-link-db 오염 방지를 위해 별도 dev D1 바인딩 권장.
+}

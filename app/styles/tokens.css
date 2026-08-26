@@ -1,0 +1,76 @@
+/* 어린이 쉬운 사전 디자인 토큰 — edu-kit/app/styles/tokens.css 에서 핵심(@theme 팔레트·타이포·그라디언트)만 발췌.
+   토큰 출처: school-portal-r2 / Codeit blue. edu-kit 계열과 색·글꼴 일치. */
+@import "tailwindcss";
+
+@theme {
+  /* Typography — Pretendard(있으면) → 시스템 한글 폴백 */
+  --font-sans: "Pretendard Variable", Pretendard, -apple-system,
+    "Apple SD Gothic Neo", "Malgun Gothic", system-ui, sans-serif;
+  --font-display: var(--font-sans);
+  --font-mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, monospace;
+
+  /* Brand — Codeit blue #3692ff */
+  --color-brand-50: #eff6ff;
+  --color-brand-100: #e7f1ff;
+  --color-brand-200: #c7e0ff;
+  --color-brand-300: #9ccaff;
+  --color-brand-400: #5fa8ff;
+  --color-brand-500: #3692ff;
+  --color-brand-600: #1f7af0; /* primary */
+  --color-brand-700: #1763d0; /* hover */
+  --color-brand-800: #184fa6;
+  --color-brand-900: #1a4382;
+  --color-primary: #1f7af0;
+
+  /* Neutral */
+  --color-ink: #1f2937;
+  --color-ink-soft: #56617a;
+  --color-ink-faint: #9aa4b5;
+  --color-paper: #f3f5f9;
+  --color-line: #e2e6ee;
+
+  /* Semantic */
+  --color-success-50: #ecfdf5; --color-success-500: #10b981; --color-success-600: #059669; --color-success: #059669;
+  --color-danger-50: #fff1f2; --color-danger-500: #f43f5e; --color-danger-600: #e11d48; --color-danger: #e11d48;
+  --color-warning-50: #fffbeb; --color-warning-500: #f59e0b; --color-warning-600: #d97706; --color-warning: #d97706;
+
+  /* Brand gradient (워드마크/배경) */
+  --gradient-wordmark: linear-gradient(135deg, #3692ff 0%, #1f7af0 60%, #1763d0 100%);
+  --gradient-page: linear-gradient(135deg, #e0f2fe 0%, #e7f1ff 40%, #faf5ff 70%, #ffffff 100%);
+
+  /* Shadow */
+  --shadow-primary-soft: 0 6px 18px rgba(31, 122, 240, 0.2);
+}
+
+/* HeroUI 계열 accent 통일(edu-link/edu-kit과 동일) */
+:root, [data-theme="light"], [data-theme="default"] {
+  --accent: #1f7af0;
+  --accent-foreground: #ffffff;
+  --accent-hover: #1763d0;
+}
+
+html, body { height: 100%; }
+body { background: var(--gradient-page); color: var(--color-ink); }
+
+/* 배경 유틸 */
+.page-gradient-bg { background: var(--gradient-page); }
+.glassmorphism {
+  background: rgba(255, 255, 255, 0.74);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border-bottom: 1px solid rgba(226, 232, 240, 0.8);
+}
+
+/* 검색어 하이라이트(결과 내) */
+.dic-hl { background: #fde68a; color: var(--color-ink); border-radius: 3px; padding: 0 2px; box-decoration-break: clone; -webkit-box-decoration-break: clone; }
+
+/* 낱말 칩 호버 */
+.word-chip { transition: border-color .15s ease, color .15s ease, background .15s ease, transform .12s ease; }
+.word-chip:hover { border-color: var(--color-brand-300); background: var(--color-brand-50); transform: translateY(-1px); }
+.word-chip:focus-visible { outline: 2px solid var(--color-brand-500); outline-offset: 2px; }
+
+/* Scrollbar */
+.dic-scroll::-webkit-scrollbar { width: 8px; height: 8px; }
+.dic-scroll::-webkit-scrollbar-track { background: transparent; }
+.dic-scroll::-webkit-scrollbar-thumb { background: rgba(148, 163, 184, 0.35); border-radius: 8px; }
+.dic-scroll::-webkit-scrollbar-thumb:hover { background: rgba(148, 163, 184, 0.55); }

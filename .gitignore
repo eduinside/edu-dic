@@ -1,0 +1,13 @@
+# deps / build
+node_modules/
+dist/
+.wrangler/
+
+# 비밀값 — 절대 커밋 금지 (KRDICT_API_KEY 등)
+.dev.vars
+
+# 로그·에디터
+*.log
+.DS_Store
+.vscode/
+.idea/

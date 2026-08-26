@@ -1,0 +1,63 @@
+import type { DictSense, LookupResult } from "../types.ts";
+
+// 낱말 조회. 프런트는 항상 우리 Function(/api/lookup)만 부른다 — krdict 인증키는 서버 전용(계획서 §2.2).
+// M0: Functions 미구현 상태에서 vite 단독 실행 시 404가 나므로 not_ready 로 부드럽게 처리.
+export async function lookupWord(word: string): Promise<LookupResult> {
+  const w = word.trim();
+  if (!w) return { status: "not_found", word: w };
+  try {
+    const res = await fetch(`/api/lookup?q=${encodeURIComponent(w)}`, {
+      headers: { accept: "application/json" },
+    });
+    if (!res.ok) {
+      // 404(엔드포인트 없음) 등 → M0 스텁 취급
+      if (res.status === 404) return { status: "not_ready", word: w };
+      return { status: "error", word: w, message: `HTTP ${res.status}` };
+    }
+    const data = (await res.json()) as LookupResult;
+    return data;
+  } catch (e) {
+    // 네트워크 실패(예: vite 단독 실행) → 화면은 placeholder
+    return { status: "not_ready", word: w };
+  }
+}
+
+// "쉬운 말로" 토글 — 사전 원문을 AI로 다시 쓴 버전(서버가 krdict 뜻풀이와 줄 수 일치를 검증한 것만 반환).
+// homographIndex: 동음이의어 탭 전환 시 지금 보고 있는 뜻만 변환하도록 서버에 알려준다(D25).
+// null이면 변환 불가(AI 미설정 등) → 호출부는 조용히 원문(entry.senses)을 계속 보여주면 된다.
+export async function fetchEasySenses(word: string, homographIndex = 0): Promise<DictSense[] | null> {
+  try {
+    const res = await fetch(`/api/simplify?q=${encodeURIComponent(word)}&h=${homographIndex}`, {
+      headers: { accept: "application/json" },
+    });
+    if (!res.ok) return null;
+    const data = (await res.json()) as { status: string; easySenses?: DictSense[] | null };
+    return data.easySenses ?? null;
+  } catch {
+    return null;
+  }
+}
+
+// AI 관련어(krdict로 검증된 낱말만). 결과가 이미 뜬 뒤 비동기로 채워지는 보조 정보.
+export async function fetchRelated(word: string): Promise<string[]> {
+  try {
+    const res = await fetch(`/api/related?q=${encodeURIComponent(word)}`, { headers: { accept: "application/json" } });
+    if (!res.ok) return [];
+    const data = (await res.json()) as { words: string[] };
+    return data.words ?? [];
+  } catch {
+    return [];
+  }
+}
+
+// 전역 인기 낱말(익명 집계). 실패해도 홈 화면은 빈 섹션으로 조용히 대체.
+export async function fetchPopular(): Promise<string[]> {
+  try {
+    const res = await fetch("/api/popular", { headers: { accept: "application/json" } });
+    if (!res.ok) return [];
+    const data = (await res.json()) as { words: string[] };
+    return data.words ?? [];
+  } catch {
+    return [];
+  }
+}

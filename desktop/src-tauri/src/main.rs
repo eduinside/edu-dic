@@ -32,9 +32,18 @@ fn resize_window(window: WebviewWindow, height: f64) -> Result<(), String> {
 #[tauri::command]
 fn toggle_fullscreen(window: WebviewWindow) -> Result<bool, String> {
     let is_fs = window.is_fullscreen().map_err(|e| e.to_string())?;
-    window.set_fullscreen(!is_fs).map_err(|e| e.to_string())?;
-    Ok(!is_fs)
+    let next_fs = !is_fs;
+    window.set_fullscreen(next_fs).map_err(|e| e.to_string())?;
+    if !next_fs {
+        let _ = window.set_size(Size::Logical(LogicalSize {
+            width: 500.0,
+            height: 680.0,
+        }));
+        let _ = window.center();
+    }
+    Ok(next_fs)
 }
+
 
 #[tauri::command]
 fn toggle_spotlight(app: AppHandle) -> Result<(), String> {

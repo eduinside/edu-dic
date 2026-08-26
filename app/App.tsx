@@ -520,8 +520,9 @@ function HomeView({
   return (
     <main className="min-h-[calc(100vh-3.5rem)] flex flex-col justify-between px-4">
       <div>
-        {/* 중앙 대형 검색창 (상단 100px+, 하단 180px+ 여백 확보) */}
-        <section className="flex flex-col items-center pt-[100px] sm:pt-[120px] pb-[180px] sm:pb-[200px] text-center">
+        {/* 중앙 대형 검색창 (상단 90px, 하단 150px 여백) */}
+        <section className="flex flex-col items-center pt-[90px] sm:pt-[110px] pb-[150px] sm:pb-[170px] text-center">
+
           <h1 className="mb-2 text-3xl font-extrabold text-ink sm:text-4xl">어린이 쉬운 사전</h1>
           <p className="mb-8 text-lg text-ink-soft">궁금한 낱말을 쉬운 말과 그림으로 알아봐요.</p>
           <div className="w-full max-w-2xl">

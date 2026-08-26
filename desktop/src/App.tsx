@@ -84,17 +84,18 @@ export default function App() {
     toastTimer.current = setTimeout(() => setToast(null), 3000);
   };
 
-  // 창 높이 동적 조절 (검색바 92px <-> 자동완성 최대 520px <-> 결과 화면 680px)
+  // 창 높이 동적 조절 (검색바 92px <-> 자동완성 최대 580px <-> 결과 화면 680px)
   useEffect(() => {
     if (isFullscreen) return;
     let targetHeight = 92;
     if (result && result.status === "ok") {
       targetHeight = 680;
     } else if (suggestions.length > 0) {
-      targetHeight = Math.min(92 + 16 + suggestions.length * 52 + 36, 520);
+      targetHeight = Math.min(92 + 20 + suggestions.length * 52 + 36, 580);
     }
     invoke("resize_window", { height: targetHeight }).catch(() => {});
   }, [result, suggestions, isFullscreen]);
+
 
   // 시작 시 업데이트 체크 및 자동 포커스
   useEffect(() => {
@@ -306,18 +307,18 @@ export default function App() {
   }
 
   return (
-    <div className={`relative flex h-full w-full flex-col justify-start select-none ${isFullscreen ? "bg-white p-6 sm:p-12 overflow-y-auto" : "p-2 bg-transparent"}`}>
+    <div className={`select-none ${isFullscreen ? "fixed inset-0 z-50 h-screen w-screen bg-white p-6 sm:p-12 overflow-y-auto" : "relative flex h-full w-full flex-col justify-start p-2 bg-transparent"}`}>
       {/* 1. 검색 결과 화면 (일반 모드 또는 전체화면 모드) */}
       {result && result.status === "ok" ? (
-        <div className={`flex flex-col overflow-hidden bg-white ${
+        <div className={`flex flex-col ${
           isFullscreen
-            ? "mx-auto max-w-5xl w-full animate-fade-in"
-            : "h-[660px] rounded-3xl border-2 border-brand-200 shadow-2xl animate-fade-in"
+            ? "mx-auto max-w-5xl w-full min-h-full bg-white animate-fade-in"
+            : "h-[660px] rounded-3xl border-2 border-brand-200 bg-white shadow-2xl overflow-hidden animate-fade-in"
         }`}>
           {/* 상단 액션 바 */}
           <div
             data-tauri-drag-region
-            className={`flex shrink-0 items-center justify-between border-b border-line bg-brand-50/90 px-4 py-2.5 ${isFullscreen ? "rounded-2xl mb-6" : "cursor-move"}`}
+            className={`flex shrink-0 items-center justify-between border-b border-line bg-brand-50/90 px-4 py-2.5 ${isFullscreen ? "rounded-2xl mb-6 shadow-xs" : "cursor-move"}`}
           >
             <button
               onClick={goBackToSearch}
@@ -331,11 +332,11 @@ export default function App() {
               <button
                 type="button"
                 onClick={toggleFullscreen}
-                className="flex items-center gap-1.5 rounded-xl bg-white px-3 py-1.5 text-xs sm:text-sm font-bold text-brand-700 hover:bg-brand-100 border border-brand-200 transition-colors shadow-xs cursor-pointer"
+                className="flex items-center gap-1.5 rounded-xl bg-white px-3.5 py-1.5 text-xs sm:text-sm font-bold text-brand-700 hover:bg-brand-100 border border-brand-200 transition-colors shadow-xs cursor-pointer"
                 title={isFullscreen ? "전체화면 종료 (ESC / F11)" : "전체화면으로 보기 (F11)"}
               >
                 {isFullscreen ? <Minimize2 className="size-4" /> : <Maximize2 className="size-4" />}
-                <span>{isFullscreen ? "창 모드로" : "전체화면으로 보기"}</span>
+                <span>{isFullscreen ? "창 모드로 돌아가기" : "전체화면으로 보기"}</span>
               </button>
 
               {!isFullscreen && (
@@ -352,7 +353,7 @@ export default function App() {
           </div>
 
           {/* 사전 상세 카드 영역 */}
-          <div className="flex-1 overflow-y-auto p-4 sm:p-6">
+          <div className={`${isFullscreen ? "p-2" : "flex-1 overflow-y-auto p-4 sm:p-6"}`}>
             <DedicatedResultCard
               entry={result.entry}
               level={level}
@@ -366,6 +367,7 @@ export default function App() {
           </div>
         </div>
       ) : (
+
         /* 2. 스팟라이트 캡슐형 검색창 화면 */
         <div className="relative flex flex-col">
           <form
@@ -608,19 +610,34 @@ function DedicatedResultCard({
           </div>
         ) : null}
 
-        {/* 하단 출처 및 웹에서 크게 보기 버튼 */}
+        {/* 하단 출처 및 누리집에서 보기 버튼 */}
         <div className="flex items-center justify-between pt-2">
           <span className="text-xs text-ink-faint">
-            {entry.source === "encykorea" ? "출처: 한국민족문화대백과사전" : "출처: 국립국어원 한국어기초사전"}
+            {(() => {
+              const dictSrc = entry.source === "encykorea" ? "한국민족문화대백과사전" : "국립국어원 한국어기초사전";
+              if (active.image) {
+                const imgSrc =
+                  active.image.source === "naver"
+                    ? "네이버 이미지 검색"
+                    : active.image.source === "encykorea"
+                      ? "한국민족문화대백과사전"
+                      : "국립국어원 한국어기초사전";
+                if (imgSrc !== dictSrc) {
+                  return `출처: ${dictSrc}, ${imgSrc}`;
+                }
+              }
+              return `출처: ${dictSrc}`;
+            })()}
           </span>
           <button
             onClick={onOpenWeb}
             className="flex items-center gap-1 text-xs sm:text-sm font-bold text-brand-600 hover:text-brand-700 cursor-pointer"
           >
             <ExternalLink className="size-3.5" />
-            <span>웹에서 크게 보기</span>
+            <span>누리집에서 보기</span>
           </button>
         </div>
+
 
         {rest.length > 0 && (
           <details className="mt-2 text-xs sm:text-sm">

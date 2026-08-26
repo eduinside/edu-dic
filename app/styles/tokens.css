@@ -49,7 +49,7 @@
   --accent-hover: #1763d0;
 }
 
-html, body { height: 100%; }
+html, body { min-height: 100%; }
 body { background: var(--gradient-page); color: var(--color-ink); }
 
 /* 배경 유틸 */

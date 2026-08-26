@@ -10,7 +10,7 @@ import { relatedWords, WORD_SETS, type WordSet } from "./lib/words.ts";
 import * as store from "./lib/storage.ts";
 import type { DictSense, LookupResult, ReadingLevel } from "./types.ts";
 
-const LANDING_PREVIEW_MAX = 8; // 랜딩 4열 각각 최대 개수(D23)
+const LANDING_PREVIEW_MAX = 5; // 랜딩 4열 각각 최대 개수(D23)
 const DEFAULT_TOPICS = ["nature-season", "school-life", "feelings-emotions"]; // 낱말 익히기 기본 노출 주제 3개
 const MYWORDS_PATH = "my"; // "나의 낱말사전" 전용 URL(D27) — 검색어 경로(/나비)와 겹치지 않게 예약.
 
@@ -419,7 +419,7 @@ function HomeView({
       {/* 중앙 대형 검색창 */}
       <section className="flex flex-col items-center pt-[8vh] pb-10 text-center">
         <h1 className="mb-2 text-3xl font-extrabold text-ink sm:text-4xl">어린이 쉬운 사전</h1>
-        <p className="mb-8 text-lg text-ink-soft">궁금한 낱말을 적으면 쉬운 뜻과 그림을 보여 줄게요</p>
+        <p className="mb-8 text-lg text-ink-soft">궁금한 낱말을 쉬운 말로 알아봐요.</p>
         <div className="w-full max-w-2xl">
           <SearchBox onSearch={onSearch} big autoFocus />
         </div>
@@ -460,7 +460,7 @@ function HomeView({
         <WordChips title="추천 낱말" emoji="🌿" words={recommended} onPick={onSearch} layout="list" onGoto={onGoto} />
       </div>
 
-      <div className="mx-auto max-w-6xl pb-24">
+      <div className="mx-auto max-w-5xl pb-24">
         <ResourceLinks heading="함께 보면 좋은 곳" />
       </div>
     </main>

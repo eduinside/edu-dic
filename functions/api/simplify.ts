@@ -36,24 +36,26 @@ export const onRequestGet: PagesFunction<Env> = async ({ request, env, waitUntil
     return json({ status: "ok", easySenses: null }); // AI 미설정 → 쉬운 말 변환만 생략, 원문은 그대로 사용 가능
   }
 
-  const numbered = targetSenses.map((s, i) => `${i + 1}. ${s.def}`).join("\n");
+  const inputData = targetSenses.map((s, i) => ({
+    no: i + 1,
+    originalDef: s.def,
+    originalExample: s.example || "",
+  }));
+
   const raw = await generateText(env, {
     systemPrompt:
-      "너는 초등학교 1~2학년 학생에게 낱말 뜻을 설명해 주는 선생님이야. 아래 국어사전 뜻풀이를 " +
-      "그 학생이 실제로 알아들을 수 있도록 쉬운 개념으로 통째로 다시 설명해. 단어만 살짝 바꾸거나 " +
-      "말끝(어미)만 다듬는 정도로는 부족해 — 어려운 한자어·전문 용어가 있으면 아이가 아는 쉬운 말이나 " +
-      "익숙한 상황에 빗댄 표현으로 완전히 풀어서 설명해도 좋아. 규칙: " +
-      "(1) 원래 뜻풀이에 없는 새로운 사실(색깔·크기·용도 같은 구체 정보)을 지어내지 마 — 설명 방식만 " +
-      "쉽게 바꾸는 것이지 내용을 추가하는 게 아니야. " +
-      "(2) 한 항목은 짧은 문장 1~2개로. " +
-      "(3) 문장 끝은 원래 사전처럼 명사형으로 끝내(예: '~하는 것.', '~한 도구.', '~하는 사람.'). " +
-      "'~하는 거야', '~해요', '~야' 같은 구어체 종결어미는 쓰지 마 — 쉬운 말이지 반말체 설명이 아니야. " +
-      "(4) 입력과 똑같은 개수로 '번호. 내용' 형식을 유지하되, 항목과 항목 사이는 반드시 줄바꿈으로 구분해 " +
-      "(한 항목의 내용 자체를 여러 줄로 쪼개지만 않으면 돼). 다른 설명은 붙이지 마.",
-    userMessage: numbered,
+      "너는 초등학교 1~2학년 학생에게 낱말 뜻을 설명해 주는 선생님이야. 아래 국어사전 뜻풀이와 예문을 " +
+      "그 학생이 실제로 알아들을 수 있도록 쉬운 개념의 뜻풀이와 학교/일상 상황의 쉬운 예문으로 다시 작성해.\n" +
+      "규칙:\n" +
+      "(1) 뜻풀이(def): 초등 저학년 눈높이로 완전히 풀어서 설명(한자어·전문용어 배제). 끝은 '~하는 것.', '~한 도구.'처럼 명사형으로 마침.\n" +
+      "(2) 예문(example): 어린이가 집이나 학교에서 직접 말하거나 겪을 법한 친근하고 쉬운 1문장. 해당 낱말이 반드시 포함되어야 함.\n" +
+      "(3) 입력 항목 개수와 순서를 정확히 유지하여 반드시 다음 JSON 배열 형식으로만 출력:\n" +
+      `[{"def": "쉬운 뜻풀이", "example": "어린이 쉬운 예문"}]`,
+    userMessage: `낱말: "${q}"\n\n항목 목록:\n${JSON.stringify(inputData, null, 2)}`,
+    temperature: 0.3,
   }).catch(() => null);
 
-  const easySenses = raw ? parseNumberedLines(raw, targetSenses) : null;
+  const easySenses = raw ? parseEasySenses(raw, targetSenses) : null;
 
   if (easySenses) {
     if (homographs) {
@@ -69,13 +71,26 @@ export const onRequestGet: PagesFunction<Env> = async ({ request, env, waitUntil
   return json({ status: "ok", easySenses });
 };
 
-// "1. 내용 2. 내용 …" 을 파싱한다. 번호 마커 기준으로 나누고(줄바꿈 여부와 무관 — AI가 가끔 한 줄에
-// 다 이어붙여서 준다, 실측) 항목 개수가 원문과 다르면 검증 실패(null)로 취급한다.
-function parseNumberedLines(raw: string, original: DictSense[]): DictSense[] | null {
-  const items = raw
-    .split(/\d+\.\s*/)
-    .map((s) => s.trim())
-    .filter((s) => s.length > 0);
-  if (items.length !== original.length) return null;
-  return items.map((def, i) => ({ def, example: original[i]?.example }));
+// JSON 배열 또는 텍스트 폴백으로 DictSense 배열 파싱
+function parseEasySenses(raw: string, original: DictSense[]): DictSense[] | null {
+  try {
+    const clean = raw.replace(/^```(json)?\s*/i, "").replace(/\s*```$/, "").trim();
+    const parsed = JSON.parse(clean) as { def?: string; example?: string }[];
+    if (Array.isArray(parsed) && parsed.length === original.length) {
+      return parsed.map((item, i) => ({
+        def: (item.def ?? "").trim() || original[i].def,
+        example: (item.example ?? "").trim() || original[i].example,
+      }));
+    }
+  } catch {
+    // JSON 파싱 실패 시 기존 번호 기반 텍스트 파싱 폴백
+    const items = raw
+      .split(/\d+\.\s*/)
+      .map((s) => s.trim())
+      .filter((s) => s.length > 0);
+    if (items.length === original.length) {
+      return items.map((def, i) => ({ def, example: original[i]?.example }));
+    }
+  }
+  return null;
 }

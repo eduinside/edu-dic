@@ -83,3 +83,23 @@ export async function fetchTopicWords(
     return { status: "error", words: [], message: "연결 중 문제가 생겼어요. 잠시 후 다시 시도해주세요." };
   }
 }
+
+// 커스텀 주제를 dgedu.link 단축 링크로 생성하여 공유
+export async function createTopicShareLink(topic: {
+  title: string;
+  emoji: string;
+  words: string[];
+}): Promise<string | null> {
+  try {
+    const res = await fetch("/api/share-topic", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(topic),
+    });
+    if (!res.ok) return null;
+    const data = (await res.json()) as { status: string; shortUrl?: string; fullUrl?: string };
+    return data.shortUrl || data.fullUrl || null;
+  } catch {
+    return null;
+  }
+}

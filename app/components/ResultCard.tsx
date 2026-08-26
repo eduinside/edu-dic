@@ -101,31 +101,51 @@ export default function ResultCard({
           />
 
           {homographs.length > 1 ? (
-            <HomographSwitcher homographs={homographs} activeIndex={safeIndex} onSelect={onHomoIndexChange} />
+            <div className="mt-4 mb-2">
+              <HomographSwitcher homographs={homographs} activeIndex={safeIndex} onSelect={onHomoIndexChange} />
+            </div>
           ) : null}
 
           {level === "easy" && !usingEasy && simplifying ? (
             <p className="mt-4 text-sm text-ink-faint">쉬운 말로 바꾸는 중…</p>
           ) : null}
+
           {primary ? (
-            <p className={`mt-6 font-semibold text-ink ${big ? "text-3xl sm:text-4xl leading-relaxed" : "text-xl leading-relaxed"}`}>
-              {primary.def}
-            </p>
+            <div className="mt-8 sm:mt-10">
+              <p className={`font-semibold text-ink ${big ? "text-3xl sm:text-4xl leading-relaxed" : "text-xl leading-relaxed"}`}>
+                {primary.def}
+              </p>
+            </div>
           ) : null}
+
           {primary?.example ? (
-            <p className={`mt-3 text-ink-soft ${big ? "text-lg sm:text-xl" : "text-lg"}`}>예: {primary.example}</p>
+            <div className={`mt-4 rounded-2xl bg-paper/70 p-4 border border-line/60 ${big ? "text-lg sm:text-xl" : "text-base sm:text-lg"}`}>
+              <span className="font-bold text-brand-700 mr-2">예문</span>
+              <span className="text-ink-soft">
+                <HighlightWord text={primary.example} word={entry.word} />
+              </span>
+            </div>
           ) : null}
-          <p className="mt-3 text-xs text-ink-faint">
+
+          <p className="mt-4 text-xs text-ink-faint">
             {entry.source === "encykorea" ? "출처: 한국민족문화대백과사전" : "출처: 국립국어원 한국어기초사전"}
           </p>
 
           {rest.length > 0 ? (
-            <details className="mt-5">
-              <summary className="cursor-pointer text-base font-semibold text-brand-600">뜻 더 보기 ({rest.length})</summary>
-              <ul className="mt-3 space-y-2">
+            <details className="mt-6">
+              <summary className="cursor-pointer text-base font-semibold text-brand-600 hover:text-brand-700">뜻 더 보기 ({rest.length})</summary>
+              <ul className="mt-3 space-y-3">
                 {rest.map((s, i) => (
-                  <li key={i} className="text-lg text-ink-soft">
-                    {i + 2}. {s.def}
+                  <li key={i} className="rounded-xl bg-paper/40 p-3 border border-line/40 text-base sm:text-lg text-ink-soft">
+                    <div className="font-medium text-ink">
+                      {i + 2}. {s.def}
+                    </div>
+                    {s.example ? (
+                      <div className="mt-1 text-sm text-ink-faint">
+                        <span className="font-semibold text-brand-600 mr-1.5">예:</span>
+                        <HighlightWord text={s.example} word={entry.word} />
+                      </div>
+                    ) : null}
                   </li>
                 ))}
               </ul>
@@ -136,6 +156,30 @@ export default function ResultCard({
         <ResultImage image={active.image} word={entry.word} big={big} />
       </div>
     </div>
+  );
+}
+
+// 예문 속 표제어 하이라이트(형광펜 효과)
+function HighlightWord({ text, word }: { text: string; word: string }) {
+  const cleanWord = word.replace(/[0-9]/g, "").trim();
+  if (!cleanWord || !text) return <span>{text}</span>;
+
+  // 단어(또는 조사 결합 어절)를 감지하여 부드러운 형광펜 효과 적용
+  const regex = new RegExp(`(${cleanWord}[가-힣]*)`, "g");
+  const parts = text.split(regex);
+
+  return (
+    <span>
+      {parts.map((part, i) =>
+        part.startsWith(cleanWord) ? (
+          <mark key={i} className="rounded-md bg-amber-100/90 text-amber-950 font-bold px-1.5 py-0.5 mx-0.5 shadow-xs">
+            {part}
+          </mark>
+        ) : (
+          <span key={i}>{part}</span>
+        ),
+      )}
+    </span>
   );
 }
 

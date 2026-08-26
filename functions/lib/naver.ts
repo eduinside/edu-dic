@@ -57,3 +57,40 @@ export async function searchNaverErrata(clientId: string, clientSecret: string, 
   const corrected = data.errata?.trim();
   return corrected || null;
 }
+
+// 네이버 웹문서 검색(NCP API Hub) — "24절기", "전통놀이" 같은 주제에서 구체적인 세부 어휘를
+// 파악하기 위해 웹문서 스니펫을 수집해 AI 컨텍스트로 제공한다.
+// https://api.ncloud-docs.com/docs/naver-api-hub-search-webkr
+export async function searchNaverWeb(
+  clientId: string,
+  clientSecret: string,
+  query: string,
+  display = 4,
+): Promise<string[]> {
+  const url = `https://naverapihub.apigw.ntruss.com/search/v1/webkr?query=${encodeURIComponent(query)}&display=${display}`;
+  try {
+    const res = await fetch(url, {
+      headers: {
+        "X-NCP-APIGW-API-KEY-ID": clientId,
+        "X-NCP-APIGW-API-KEY": clientSecret,
+      },
+    });
+    if (!res.ok) return [];
+
+    const data = (await res.json()) as {
+      items?: { title?: string; description?: string }[];
+    };
+    if (!data.items || !Array.isArray(data.items)) return [];
+
+    // HTML 태그(<b>, </b>, &quot; 등) 제거 및 텍스트 정리
+    return data.items
+      .map((item) => {
+        const title = (item.title ?? "").replace(/<[^>]+>/g, "").replace(/&[a-z0-9#]+;/gi, " ");
+        const desc = (item.description ?? "").replace(/<[^>]+>/g, "").replace(/&[a-z0-9#]+;/gi, " ");
+        return `${title}: ${desc}`.trim();
+      })
+      .filter((text) => text.length > 5);
+  } catch {
+    return [];
+  }
+}

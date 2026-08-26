@@ -65,8 +65,9 @@ export const onRequestGet: PagesFunction<Env> = async (context) => {
     }
   }
 
-  // 중복 제거 및 상위 최대 25개 추출 (10개~25개 사이로 컨텐츠 매칭에 따라 유연하게 제공)
-  const combined = Array.from(new Set([...exactPrefix, ...choseongPrefix, ...contains])).slice(0, 25);
+  // 중복 제거 및 상위 10개 추출 (가장 적절하고 간결한 개수로 최적화)
+  const combined = Array.from(new Set([...exactPrefix, ...choseongPrefix, ...contains])).slice(0, 10);
+
 
 
   return jsonResponse({

@@ -60,4 +60,6 @@ export interface CustomWordSet {
   emoji: string;
   words: string[];
   createdAt: string;
+  isShared?: boolean; // 공유받은 주제 여부
 }
+

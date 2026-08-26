@@ -64,7 +64,7 @@ export async function generateText(env: Env, opts: GenerateOpts): Promise<string
   if (geminiKey) {
     try {
       const res = await fetch(
-        `https://generativelanguage.googleapis.com/v1beta/models/gemini-flash-lite-latest:generateContent?key=${geminiKey}`,
+        `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${geminiKey}`,
         {
           method: "POST",
           headers: { "content-type": "application/json" },
@@ -75,6 +75,7 @@ export async function generateText(env: Env, opts: GenerateOpts): Promise<string
           }),
         },
       );
+
       if (res.ok) {
         const data = (await res.json()) as { candidates?: { content?: { parts?: { text?: string }[] } }[] };
         const text = data?.candidates?.[0]?.content?.parts?.[0]?.text;

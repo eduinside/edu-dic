@@ -24,6 +24,8 @@ export default function SearchBox({ onSearch, initial = "", big = false, autoFoc
 
   useEffect(() => {
     setValue(initial);
+    setIsOpen(false);
+    setSuggestions([]);
   }, [initial]);
 
   // 디바운스된 자동완성 제안 호출
@@ -67,6 +69,7 @@ export default function SearchBox({ onSearch, initial = "", big = false, autoFoc
     setValue(word);
     setIsOpen(false);
     setSuggestions([]);
+    inputRef.current?.blur();
     onSearch(word);
   }
 
@@ -97,6 +100,8 @@ export default function SearchBox({ onSearch, initial = "", big = false, autoFoc
         return;
       }
       setIsOpen(false);
+      setSuggestions([]);
+      inputRef.current?.blur();
       onSearch(w);
     }
   }
@@ -121,7 +126,7 @@ export default function SearchBox({ onSearch, initial = "", big = false, autoFoc
       <form onSubmit={submit} className="w-full" role="search">
         <div
           className={`relative flex items-center rounded-full border-2 border-brand-200 bg-white shadow-[var(--shadow-primary-soft)] focus-within:border-brand-500 focus-within:shadow-[var(--shadow-primary-glow)] transition-all ${
-            big ? "py-2 pl-6 pr-2" : "py-1.5 pl-5 pr-1.5"
+            big ? "py-2 pl-6 pr-2" : "py-1.5 pl-4 pr-1.5"
           }`}
         >
           <input
@@ -136,14 +141,15 @@ export default function SearchBox({ onSearch, initial = "", big = false, autoFoc
             inputMode="text"
             enterKeyHint="search"
             autoComplete="off"
-            placeholder="궁금한 낱말이나 초성을 적어보세요 (예: ㄱㅇ)"
+            placeholder={big ? "궁금한 낱말이나 초성을 적어보세요 (예: ㄱㅇ, 바다)" : "궁금한 낱말이나 초성을 적어보세요"}
             aria-label="낱말 검색"
             aria-expanded={isOpen}
             aria-autocomplete="list"
             className={`min-w-0 flex-1 bg-transparent outline-none placeholder:text-ink-faint text-ink ${
-              big ? "text-2xl sm:text-3xl" : "text-lg"
+              big ? "text-2xl sm:text-3xl" : "text-base sm:text-lg"
             }`}
           />
+
           <button
             type="submit"
             aria-label="낱말 찾기"

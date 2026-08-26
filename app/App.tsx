@@ -214,7 +214,9 @@ export default function App() {
           emoji: parsed.emoji || "💡",
           words: parsed.words,
           createdAt: new Date().toISOString(),
+          isShared: true, // 공유 받음 표식
         };
+
         const updated = store.saveCustomWordSet(newSet);
         setCustomWordSets(updated);
         // 관심 주제에 추가
@@ -978,16 +980,17 @@ function CreateTopicModal({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={onClose}>
-      <div className="w-full max-w-lg rounded-2xl bg-white p-6 shadow-xl max-h-[92vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
+      <div className="w-full max-w-xl rounded-2xl bg-white p-6 shadow-xl max-h-[92vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
         <div className="mb-4 flex items-center justify-between">
           <div>
             <h2 className="text-lg font-extrabold text-ink">새 관심 주제 만들기</h2>
-            <p className="mt-0.5 text-xs text-ink-faint">궁금하거나 배우고 싶은 주제를 적으면, 알맞은 쉬운 낱말을 사전에서 골라 모아줘요.</p>
+            <p className="mt-0.5 text-xs text-ink-faint">주제를 적으면 알맞은 쉬운 낱말을 사전에서 골라 모아줘요.</p>
           </div>
           <button onClick={onClose} aria-label="닫기" className="text-ink-faint hover:text-ink">
             <X className="size-5" aria-hidden />
           </button>
         </div>
+
 
         {/* 주제 입력 및 어휘 수집 폼 */}
         <form onSubmit={handleGenerate} className="space-y-4">
@@ -1151,11 +1154,18 @@ function TopicCard({
           <span className="text-xl">{set.emoji}</span>
           <span className="text-lg font-extrabold text-ink">{set.title}</span>
           {isCustom ? (
-            <span className="rounded-md bg-brand-50 px-2 py-0.5 text-xs font-bold text-brand-700 border border-brand-200">
-              직접 만듦
-            </span>
+            (set as CustomWordSet).isShared ? (
+              <span className="rounded-md bg-amber-50 px-2 py-0.5 text-xs font-bold text-amber-700 border border-amber-200">
+                공유 받음
+              </span>
+            ) : (
+              <span className="rounded-md bg-brand-50 px-2 py-0.5 text-xs font-bold text-brand-700 border border-brand-200">
+                직접 만듦
+              </span>
+            )
           ) : null}
         </button>
+
         <div className="flex items-center gap-1.5">
           {isCustom && onShare ? (
             <button

@@ -24,5 +24,15 @@ CREATE TABLE IF NOT EXISTS edudic_popular_daily (
 -- 최근 30일 랭킹 조회용 인덱스
 CREATE INDEX IF NOT EXISTS idx_edudic_popular_daily_day ON edudic_popular_daily (day);
 
+-- 커스텀 낱말 주제 공유 테이블 (dgedu.link 단축 공유 연계 & 커스텀 주제 역탐색용)
+CREATE TABLE IF NOT EXISTS edudic_shares (
+  id         TEXT PRIMARY KEY,
+  payload    TEXT NOT NULL,               -- { title, emoji, words } JSON
+  created_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
+CREATE INDEX IF NOT EXISTS idx_edudic_shares_created_at ON edudic_shares (created_at);
+
 -- (선택) 오래된 버킷 정리는 주기 작업으로:
 --   DELETE FROM edudic_popular_daily WHERE day < date('now','-30 day');
+

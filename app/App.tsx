@@ -516,16 +516,17 @@ export default function App() {
             ) : communityTopic ? (
               /* 2. 다른 사용자가 등록/공유한 커스텀 낱말사전 소속 주제 */
               <div className="mt-6">
-                <WordChips title={`${communityTopic.title} (함께 만든 주제)`} emoji={communityTopic.emoji} words={communityTopic.words} onPick={search} />
+                <WordChips title={`${communityTopic.title} 낱말 더 보기`} emoji={communityTopic.emoji} words={communityTopic.words} onPick={search} />
               </div>
             ) : null}
 
-            {/* 3. AI 추천 비슷한 낱말 */}
+            {/* 3. 뜻/주제 연관 낱말 추천 */}
             {aiRelated.length > 0 ? (
               <div className="mt-6">
-                <WordChips title="AI 비슷한 낱말" emoji="✨" words={aiRelated} onPick={search} />
+                <WordChips title="함께 알면 좋은 낱말" emoji="✨" words={aiRelated} onPick={search} />
               </div>
             ) : null}
+
           </div>
         </main>
 

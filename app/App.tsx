@@ -178,43 +178,60 @@ export default function App() {
     setLevel(s.level ?? "dict");
     fetchPopular().then(setPopular);
 
-    // 공유 링크(?shareTopic=...)로 진입한 경우 처리
-    const shareParam = new URLSearchParams(window.location.search).get("shareTopic");
-    if (shareParam) {
+    // 공유 링크(?shareId=... 또는 ?shareTopic=...)로 진입한 경우 처리
+    const searchParams = new URLSearchParams(window.location.search);
+    const shareTopicParam = searchParams.get("shareTopic");
+    const shareIdParam = searchParams.get("shareId");
+
+    const importTopic = (parsed: { title?: string; emoji?: string; words?: string[] }) => {
+      if (parsed.title && Array.isArray(parsed.words) && parsed.words.length > 0) {
+        const newSet: CustomWordSet = {
+          id: `custom_${Date.now()}`,
+          title: parsed.title,
+          emoji: parsed.emoji || "💡",
+          words: parsed.words,
+          createdAt: new Date().toISOString(),
+        };
+        const updated = store.saveCustomWordSet(newSet);
+        setCustomWordSets(updated);
+        // 관심 주제에 추가
+        const curSettings = store.getSettings();
+        const nextTopics = curSettings.interestedTopics
+          ? [newSet.id, ...curSettings.interestedTopics.filter((t) => t !== newSet.id)]
+          : [newSet.id, ...DEFAULT_TOPICS];
+        store.setSettings({ interestedTopics: nextTopics });
+
+        setHighlightedTopicId(newSet.id);
+        setTimeout(() => setHighlightedTopicId(null), 3000);
+        showToast(`'${newSet.title}' 주제가 낱말사전에 추가되었어요!`);
+        window.history.replaceState({}, "", `/${MYWORDS_PATH}`);
+        openMyWords("recent", false);
+      }
+    };
+
+    if (shareTopicParam) {
       try {
-        const parsed = JSON.parse(decodeURIComponent(shareParam)) as {
+        const parsed = JSON.parse(decodeURIComponent(shareTopicParam)) as {
           title?: string;
           emoji?: string;
           words?: string[];
         };
-        if (parsed.title && Array.isArray(parsed.words) && parsed.words.length > 0) {
-          const newSet: CustomWordSet = {
-            id: `custom_${Date.now()}`,
-            title: parsed.title,
-            emoji: parsed.emoji || "💡",
-            words: parsed.words,
-            createdAt: new Date().toISOString(),
-          };
-          const updated = store.saveCustomWordSet(newSet);
-          setCustomWordSets(updated);
-          // 관심 주제에 추가
-          const curSettings = store.getSettings();
-          const nextTopics = curSettings.interestedTopics
-            ? [newSet.id, ...curSettings.interestedTopics.filter((t) => t !== newSet.id)]
-            : [newSet.id, ...DEFAULT_TOPICS];
-          store.setSettings({ interestedTopics: nextTopics });
-
-          setHighlightedTopicId(newSet.id);
-          setTimeout(() => setHighlightedTopicId(null), 3000);
-          showToast(`'${newSet.title}' 주제가 낱말사전에 추가되었어요!`);
-          window.history.replaceState({}, "", `/${MYWORDS_PATH}`);
-          openMyWords("recent", false);
-          return;
-        }
+        importTopic(parsed);
+        return;
       } catch {
         /* 파싱 실패 시 일반 라우트 진행 */
       }
+    } else if (shareIdParam) {
+      fetch(`/api/share-topic?id=${encodeURIComponent(shareIdParam)}`)
+        .then((res) => (res.ok ? res.json() : null))
+        .then((data) => {
+          if (data && data.status === "ok") {
+            importTopic(data as { title?: string; emoji?: string; words?: string[] });
+          }
+        })
+        .catch(() => {});
     }
+
 
     const applyRoute = (r: RouteInfo) => {
       if (r.kind === "word") search(r.word, { pushUrl: false });

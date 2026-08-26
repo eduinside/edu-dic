@@ -16,8 +16,8 @@ interface Props {
   // 어느 동음이의어를 보는 중인지 상위(App.tsx)의 simplify 호출 로직도 알아야 해서 여기로 끌어올렸다).
   onHomoIndexChange: (i: number) => void;
   onImageAction?: (action: "next" | "hide", currentUrl: string) => Promise<void>;
+  onRefresh?: () => void;
 }
-
 
 // 검색 결과: 대형 낱말 + 대표 뜻 + 이미지 1장. 낱말·뜻·이미지가 "한 번에" 보이도록 자리를 미리 잡는다.
 // 큰 화면(발표) 모드에서는 일반 모니터 기준 화면 높이의 약 70%를 차지하도록 키운다.
@@ -34,7 +34,9 @@ export default function ResultCard({
   homoIndex,
   onHomoIndexChange,
   onImageAction,
+  onRefresh,
 }: Props) {
+
 
   if (loading) {
     return (
@@ -134,9 +136,20 @@ export default function ResultCard({
             </div>
           ) : null}
 
-          <p className="mt-4 text-xs text-ink-faint">
-            {entry.source === "encykorea" ? "출처: 한국민족문화대백과사전" : "출처: 국립국어원 한국어기초사전"}
-          </p>
+          <div className="mt-4 flex flex-wrap items-center justify-between gap-2 text-xs text-ink-faint">
+            <p>{entry.source === "encykorea" ? "출처: 한국민족문화대백과사전" : "출처: 국립국어원 한국어기초사전"}</p>
+            {onRefresh ? (
+              <button
+                type="button"
+                onClick={onRefresh}
+                className="inline-flex items-center gap-1 rounded-md bg-paper px-2.5 py-1 font-medium text-ink-soft hover:bg-brand-50 hover:text-brand-700 transition-colors border border-line/60 shadow-2xs"
+                title="사전 최신 내용으로 새로고침 (캐시 갱신)"
+              >
+                <RefreshCw className="size-3" />
+                <span>사전 새로고침</span>
+              </button>
+            ) : null}
+          </div>
 
           {rest.length > 0 ? (
             <details className="mt-6">
@@ -163,11 +176,17 @@ export default function ResultCard({
 
         </div>
 
-        <ResultImage image={active.image} word={entry.word} big={big} />
+        <ResultImage
+          image={active.image}
+          word={entry.word}
+          big={big}
+          onImageAction={onImageAction}
+        />
       </div>
     </div>
   );
 }
+
 
 // 예문 속 표제어 하이라이트(형광펜 효과) — 조사 제외 해당 낱말만 정확히 강조
 function HighlightWord({ text, word }: { text: string; word: string }) {
@@ -332,6 +351,12 @@ function ResultImage({
     }
   };
 
+  const isNaverImage =
+    image.source === "naver" ||
+    image.attribution?.includes("네이버") ||
+    image.attribution?.includes("사진 검색") ||
+    image.url?.includes("pstatic.net");
+
   return (
     <figure className={`w-full aspect-square shrink-0 ${sizeAtSm}`}>
       <div className="relative size-full overflow-hidden rounded-2xl bg-paper">
@@ -350,10 +375,10 @@ function ResultImage({
       <div className="mt-1.5 flex flex-wrap items-center justify-between gap-1 text-[11px] text-ink-faint">
         <figcaption>
           {image.attribution}
-          {image.source === "naver" ? <span className="ml-1 text-ink-faint/70">· 사진 검색</span> : null}
+          {isNaverImage ? <span className="ml-1 text-ink-faint/70">· 사진 검색</span> : null}
         </figcaption>
 
-        {image.source === "naver" && onImageAction ? (
+        {isNaverImage && onImageAction ? (
           <div className="flex items-center gap-1">
             <button
               type="button"
@@ -381,4 +406,5 @@ function ResultImage({
     </figure>
   );
 }
+
 

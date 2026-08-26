@@ -2,13 +2,14 @@ import type { DictSense, LookupResult } from "../types.ts";
 
 // 낱말 조회. 프런트는 항상 우리 Function(/api/lookup)만 부른다 — krdict 인증키는 서버 전용(계획서 §2.2).
 // M0: Functions 미구현 상태에서 vite 단독 실행 시 404가 나므로 not_ready 로 부드럽게 처리.
-export async function lookupWord(word: string): Promise<LookupResult> {
+export async function lookupWord(word: string, refresh = false): Promise<LookupResult> {
   const w = word.trim();
   if (!w) return { status: "not_found", word: w };
   try {
-    const res = await fetch(`/api/lookup?q=${encodeURIComponent(w)}`, {
+    const res = await fetch(`/api/lookup?q=${encodeURIComponent(w)}${refresh ? "&refresh=true" : ""}`, {
       headers: { accept: "application/json" },
     });
+
     if (!res.ok) {
       // 404(엔드포인트 없음) 등 → M0 스텁 취급
       if (res.status === 404) return { status: "not_ready", word: w };

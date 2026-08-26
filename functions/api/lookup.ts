@@ -72,8 +72,11 @@ export const onRequestGet: PagesFunction<Env> = async ({ request, env, waitUntil
     return json({ status: "error", word: q, message: "KRDICT_API_KEY 미설정(.dev.vars)" }, { status: 500 });
   }
 
+  const refresh = url.searchParams.get("refresh") === "true" || url.searchParams.get("refresh") === "1";
+
   try {
-    const entry = await getOrFetchEntry(env, q, waitUntil);
+    const entry = await getOrFetchEntry(env, q, waitUntil, refresh);
+
     if (!entry) {
       const suggestion = await suggestCorrection(env, q).catch(() => undefined);
       return json({ status: "not_found", word: q, suggestion });

@@ -52,9 +52,13 @@ export async function getOrFetchEntry(
   env: Env,
   word: string,
   waitUntil?: (p: Promise<unknown>) => void,
+  refresh = false,
 ): Promise<DictEntry | null> {
-  const cached = await getCachedEntry(env, word);
-  if (cached) return cached;
+  if (!refresh) {
+    const cached = await getCachedEntry(env, word);
+    if (cached) return cached;
+  }
+
 
   if (!env.KRDICT_API_KEY) return null;
 

@@ -93,22 +93,42 @@ async function viewDetail(key: string, targetCode: string): Promise<ViewDetail |
       const def = textOrNull(extractFirst(block, "definition"));
       if (!def) return null;
 
-      // example_info 블록 안의 모든 <example> 태그를 수집 (대화형 예문의 경우 가:, 나: 가 여러 줄로 들어옴)
+      // 예문 수집: 문장형(또는 대화형) 대표 예문 최대 2개를 " / "로 연결하여 한 줄로 제공
       let example: string | undefined = undefined;
       const exampleBlocks = extractAll(block, "example_info");
+
+      const sentenceExamples: string[] = [];
+      const dialogueExamples: string[] = [];
+      const phraseExamples: string[] = [];
+
       for (const exBlock of exampleBlocks) {
-        const examples = extractAll(exBlock, "example")
+        const type = textOrNull(extractFirst(exBlock, "type")) ?? "문장";
+        const exTexts = extractAll(exBlock, "example")
           .map((e) => textOrNull(e))
-          .filter((e): e is string => !!e);
-        if (examples.length > 0) {
-          example = examples.join("\n");
-          break;
+          .filter((e): e is string => !!e)
+          .map((t) => t.replace(/[\r\n]+/g, " / ").replace(/\s*\/\s*/g, " / ").trim());
+
+        if (type === "문장") {
+          sentenceExamples.push(...exTexts);
+        } else if (type === "대화") {
+          dialogueExamples.push(...exTexts);
+        } else if (type === "구") {
+          phraseExamples.push(...exTexts);
         }
+      }
+
+      if (sentenceExamples.length > 0) {
+        example = sentenceExamples.slice(0, 2).join(" / ");
+      } else if (dialogueExamples.length > 0) {
+        example = dialogueExamples.slice(0, 2).join(" / ");
+      } else if (phraseExamples.length > 0) {
+        example = phraseExamples.slice(0, 2).join(" / ");
       }
 
       return { def, example } as DictSense;
     })
     .filter((s): s is DictSense => s !== null);
+
 
 
   // 사진/삽화 타입의 첫 multimedia_info 링크를 대표 이미지 후보로 사용(동영상·음성 등은 제외).

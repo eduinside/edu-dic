@@ -219,6 +219,16 @@ export default function App() {
     [result, word, homoIndex, showToast],
   );
 
+  const handleRefreshWord = useCallback(async () => {
+    if (!word) return;
+    setLoading(true);
+    const r = await lookupWord(word, true);
+    setResult(r);
+    setLoading(false);
+    showToast("사전 내용을 최신으로 새로고침했어요!");
+  }, [word, showToast]);
+
+
 
 
   const goHome = useCallback((pushUrl = true) => {
@@ -543,7 +553,9 @@ export default function App() {
               homoIndex={homoIndex}
               onHomoIndexChange={handleHomoIndexChange}
               onImageAction={handleImageAction}
+              onRefresh={handleRefreshWord}
             />
+
 
 
             {/* 1. 내가 만든 주제 또는 기본 세트에 속한 경우 */}

@@ -1,9 +1,11 @@
 import { json, type Env } from "../_shared.ts";
 import { isBlocked } from "../lib/blocklist.ts";
 import { getOrFetchEntry } from "../lib/dictionary.ts";
+import { isChoseongOnly, matchesChoseongOrPrefix } from "../lib/choseong.ts";
 import { KrdictError, searchWord } from "../lib/krdict.ts";
 import { searchNaverErrata } from "../lib/naver.ts";
-import { bumpPopular } from "../lib/store.ts";
+import { bumpPopular, getCachedWords } from "../lib/store.ts";
+
 
 // 사전에 없는 낱말일 때만(드문 경로) 네이버 오타 변환 API(NCP API Hub)로 교정을 시도하고, 그 결과가
 // 실제 krdict 표제어인지 다시 검증한다(D29 — AI 대신 이 공식 API로 교체. 이미지 검색과 같은 키·쿼터
@@ -35,16 +37,33 @@ async function suggestCorrection(env: Env, word: string): Promise<string | undef
 // 4) 성공 조회만 edudic_popular 카운트 증가(익명, 차단어는 집계 제외)
 export const onRequestGet: PagesFunction<Env> = async ({ request, env, waitUntil }) => {
   const url = new URL(request.url);
-  const q = (url.searchParams.get("q") ?? "").trim();
+  let q = (url.searchParams.get("q") ?? "").trim();
   if (!q) return json({ status: "not_found", word: "" });
 
   if (isBlocked(q)) {
     return json({ status: "blocked", word: q });
   }
 
+  // 0) 검색어가 초성만으로 구성된 경우 (예: "ㄷㄱ", "ㄱㅇ")
+  // D1 캐시된 낱말 목록에서 해당 초성으로 시작하거나 일치하는 최우선 낱말로 자동 대체 조회
+  if (isChoseongOnly(q)) {
+    const cachedWords = await getCachedWords(env);
+    const matched = cachedWords.find((w) => matchesChoseongOrPrefix(w, q));
+    if (matched) {
+      q = matched;
+    } else {
+      return json({
+        status: "not_found",
+        word: q,
+        message: `‘${q}’ 초성에 맞는 추천 낱말을 찾지 못했어요.`,
+      });
+    }
+  }
+
   if (!env.KRDICT_API_KEY) {
     return json({ status: "error", word: q, message: "KRDICT_API_KEY 미설정(.dev.vars)" }, { status: 500 });
   }
+
 
   try {
     const entry = await getOrFetchEntry(env, q, waitUntil);

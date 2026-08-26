@@ -92,10 +92,24 @@ async function viewDetail(key: string, targetCode: string): Promise<ViewDetail |
     .map((block) => {
       const def = textOrNull(extractFirst(block, "definition"));
       if (!def) return null;
-      const firstExample = extractFirst(extractFirst(block, "example_info") ?? "", "example");
-      return { def, example: textOrNull(firstExample) ?? undefined } as DictSense;
+
+      // example_info 블록 안의 모든 <example> 태그를 수집 (대화형 예문의 경우 가:, 나: 가 여러 줄로 들어옴)
+      let example: string | undefined = undefined;
+      const exampleBlocks = extractAll(block, "example_info");
+      for (const exBlock of exampleBlocks) {
+        const examples = extractAll(exBlock, "example")
+          .map((e) => textOrNull(e))
+          .filter((e): e is string => !!e);
+        if (examples.length > 0) {
+          example = examples.join("\n");
+          break;
+        }
+      }
+
+      return { def, example } as DictSense;
     })
     .filter((s): s is DictSense => s !== null);
+
 
   // 사진/삽화 타입의 첫 multimedia_info 링크를 대표 이미지 후보로 사용(동영상·음성 등은 제외).
   let mediaPageUrl: string | null = null;

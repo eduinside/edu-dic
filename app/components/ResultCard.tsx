@@ -120,10 +120,12 @@ export default function ResultCard({
 
           {primary?.example ? (
             <div className={`mt-4 rounded-2xl bg-paper/70 p-4 border border-line/60 ${big ? "text-lg sm:text-xl" : "text-base sm:text-lg"}`}>
-              <span className="font-bold text-brand-700 mr-2">예문</span>
-              <span className="text-ink-soft">
-                <HighlightWord text={primary.example} word={entry.word} />
-              </span>
+              <div className="flex items-start gap-2.5">
+                <span className="shrink-0 font-bold text-brand-700 mt-0.5">예문</span>
+                <span className="text-ink-soft whitespace-pre-line leading-relaxed">
+                  <HighlightWord text={primary.example} word={entry.word} />
+                </span>
+              </div>
             </div>
           ) : null}
 
@@ -141,9 +143,11 @@ export default function ResultCard({
                       {i + 2}. {s.def}
                     </div>
                     {s.example ? (
-                      <div className="mt-1 text-sm text-ink-faint">
-                        <span className="font-semibold text-brand-600 mr-1.5">예:</span>
-                        <HighlightWord text={s.example} word={entry.word} />
+                      <div className="mt-2 flex items-start gap-1.5 text-sm text-ink-soft">
+                        <span className="shrink-0 font-semibold text-brand-600 mr-0.5">예:</span>
+                        <span className="whitespace-pre-line leading-relaxed">
+                          <HighlightWord text={s.example} word={entry.word} />
+                        </span>
                       </div>
                     ) : null}
                   </li>
@@ -151,6 +155,7 @@ export default function ResultCard({
               </ul>
             </details>
           ) : null}
+
         </div>
 
         <ResultImage image={active.image} word={entry.word} big={big} />

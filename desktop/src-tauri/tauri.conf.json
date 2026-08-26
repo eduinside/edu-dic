@@ -1,8 +1,9 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
   "productName": "어린이 쉬운 사전 데스크탑",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "identifier": "link.dgedu.dic.desktop",
+
 
   "build": {
     "beforeDevCommand": "npm run dev",
@@ -14,10 +15,10 @@
     "windows": [
       {
         "title": "어린이 쉬운 사전 데스크탑",
-        "width": 640,
-        "height": 80,
+        "width": 680,
+        "height": 88,
         "minWidth": 480,
-        "minHeight": 80,
+        "minHeight": 88,
         "resizable": true,
         "decorations": false,
         "transparent": true,
@@ -26,6 +27,7 @@
         "skipTaskbar": true,
         "center": true,
         "visible": true
+
       }
     ],
     "security": {

@@ -70,6 +70,20 @@ export default function SearchBox({ onSearch, initial = "", big = false, autoFoc
     onSearch(word);
   }
 
+  const CHOSEONG_LIST = [
+    "ㄱ", "ㄲ", "ㄴ", "ㄷ", "ㄸ", "ㄹ", "ㅁ", "ㅂ", "ㅃ", "ㅅ",
+    "ㅆ", "ㅇ", "ㅈ", "ㅉ", "ㅊ", "ㅋ", "ㅌ", "ㅍ", "ㅎ",
+  ];
+
+  function isChoseongOnly(str: string): boolean {
+    const trimmed = str.trim();
+    if (!trimmed) return false;
+    for (let i = 0; i < trimmed.length; i++) {
+      if (!CHOSEONG_LIST.includes(trimmed[i])) return false;
+    }
+    return true;
+  }
+
   function submit(e: React.FormEvent) {
     e.preventDefault();
     if (isOpen && selectedIndex >= 0 && suggestions[selectedIndex]) {
@@ -78,10 +92,15 @@ export default function SearchBox({ onSearch, initial = "", big = false, autoFoc
     }
     const w = value.trim();
     if (w) {
+      if (isChoseongOnly(w) && suggestions.length > 0) {
+        handleSelect(suggestions[0]);
+        return;
+      }
       setIsOpen(false);
       onSearch(w);
     }
   }
+
 
   function handleKeyDown(e: React.KeyboardEvent) {
     if (!isOpen || suggestions.length === 0) return;

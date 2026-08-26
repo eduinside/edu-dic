@@ -4,34 +4,31 @@ use std::sync::Mutex;
 use tauri::{
     menu::{Menu, MenuItem},
     tray::TrayIconBuilder,
-    AppHandle, Manager, PhysicalSize, Size, WebviewWindow,
+    AppHandle, LogicalSize, Manager, Size, WebviewWindow,
 };
 use tauri_plugin_autostart::MacosLauncher;
 use tauri_plugin_global_shortcut::{GlobalShortcutExt, Shortcut};
 use tauri_plugin_opener::OpenerExt;
 
-
-
 const TRAY_ID: &str = "edu-dic-tray";
 const WEB_URL: &str = "https://dic.dgedu.link";
 const DEFAULT_SHORTCUT: &str = "Ctrl+Alt+D";
-
 
 struct AppState {
     always_on_top: Mutex<bool>,
 }
 
 #[tauri::command]
-fn resize_window(window: WebviewWindow, height: u32) -> Result<(), String> {
-    let current_size = window.outer_size().map_err(|e| e.to_string())?;
+fn resize_window(window: WebviewWindow, height: f64) -> Result<(), String> {
     window
-        .set_size(Size::Physical(PhysicalSize {
-            width: current_size.width.max(640),
+        .set_size(Size::Logical(LogicalSize {
+            width: 680.0,
             height,
         }))
         .map_err(|e| e.to_string())?;
     Ok(())
 }
+
 
 
 

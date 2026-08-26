@@ -23,6 +23,20 @@ import {
 } from "./lib/api.ts";
 import { checkForAppUpdates } from "./lib/updates.ts";
 
+const CHOSEONG_LIST = [
+  "ㄱ", "ㄲ", "ㄴ", "ㄷ", "ㄸ", "ㄹ", "ㅁ", "ㅂ", "ㅃ", "ㅅ",
+  "ㅆ", "ㅇ", "ㅈ", "ㅉ", "ㅊ", "ㅋ", "ㅌ", "ㅍ", "ㅎ",
+];
+
+function isChoseongOnly(str: string): boolean {
+  const trimmed = str.trim();
+  if (!trimmed) return false;
+  for (let i = 0; i < trimmed.length; i++) {
+    if (!CHOSEONG_LIST.includes(trimmed[i])) return false;
+  }
+  return true;
+}
+
 export default function App() {
   const [query, setQuery] = useState("");
   const [suggestions, setSuggestions] = useState<string[]>([]);
@@ -41,16 +55,16 @@ export default function App() {
   const showToast = (msg: string) => {
     setToast(msg);
     clearTimeout(toastTimer.current);
-    toastTimer.current = setTimeout(() => setToast(null), 2500);
+    toastTimer.current = setTimeout(() => setToast(null), 2800);
   };
 
-  // 창 높이 동적 조절 (검색바 80px <-> 자동완성 340px <-> 결과 화면 580px)
+  // 창 높이 동적 조절 (검색바 88px <-> 자동완성 400px <-> 결과 화면 620px)
   useEffect(() => {
-    let targetHeight = 80;
+    let targetHeight = 88;
     if (result && result.status === "ok") {
-      targetHeight = 580;
+      targetHeight = 620;
     } else if (suggestions.length > 0) {
-      targetHeight = Math.min(80 + suggestions.length * 44 + 30, 360);
+      targetHeight = Math.min(88 + suggestions.length * 46 + 25, 420);
     }
     invoke("resize_window", { height: targetHeight }).catch(() => {});
   }, [result, suggestions]);
@@ -161,7 +175,6 @@ export default function App() {
         setResult(r);
         setHomoIndex(0);
       } else {
-        // 답이 없는 경우 토스트 안내 (화면 전환 없이 스팟라이트 유지)
         const msg =
           r.status === "blocked"
             ? "이 낱말은 찾을 수 없어요. 다른 낱말을 적어 볼까요?"
@@ -174,15 +187,34 @@ export default function App() {
     }
   }
 
-  function handleFormSubmit(e: React.FormEvent) {
+  // 검색 폼 제출 (초성 입력 시 자동 1순위 추천어로 스마트 연결)
+  async function handleFormSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (selectedIndex >= 0 && suggestions[selectedIndex]) {
       submitSearch(suggestions[selectedIndex]);
       return;
     }
-    if (query.trim()) {
-      submitSearch(query);
+    const trimmed = query.trim();
+    if (!trimmed) return;
+
+    // 초성만 입력한 경우 (예: "ㄷㄱ", "ㄱㅇ")
+    if (isChoseongOnly(trimmed)) {
+      if (suggestions.length > 0) {
+        submitSearch(suggestions[0]);
+        return;
+      }
+      setLoading(true);
+      const list = await fetchSuggestions(trimmed);
+      setLoading(false);
+      if (list.length > 0) {
+        submitSearch(list[0]);
+        return;
+      }
+      showToast(`‘${trimmed}’ 초성에 맞는 낱말을 찾지 못했어요.`);
+      return;
     }
+
+    submitSearch(trimmed);
   }
 
   function handleInputKeyDown(e: React.KeyboardEvent) {
@@ -221,18 +253,18 @@ export default function App() {
   }
 
   return (
-    <div className="relative flex h-screen w-screen flex-col justify-start p-2 bg-transparent">
+    <div className="relative flex h-full w-full flex-col justify-start p-2 bg-transparent select-none">
       {/* 1. 검색 결과 별도 화면 */}
       {result && result.status === "ok" ? (
-        <div className="flex h-full flex-col overflow-hidden rounded-3xl border-2 border-brand-200 bg-white/98 shadow-2xl backdrop-blur-xl animate-fade-in">
+        <div className="flex h-[600px] flex-col overflow-hidden rounded-3xl border-2 border-brand-200 bg-white shadow-2xl animate-fade-in">
           {/* 상단 액션 바 */}
           <div
             data-tauri-drag-region
-            className="flex shrink-0 items-center justify-between border-b border-line/60 bg-brand-50/70 px-4 py-2.5 cursor-move"
+            className="flex shrink-0 items-center justify-between border-b border-line/60 bg-brand-50/80 px-4 py-2.5 cursor-move"
           >
             <button
               onClick={goBackToSearch}
-              className="flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-bold text-brand-700 bg-white hover:bg-brand-100 transition-colors shadow-xs"
+              className="flex items-center gap-1.5 rounded-full px-3.5 py-1.5 text-xs font-bold text-brand-700 bg-white hover:bg-brand-100 transition-colors shadow-xs cursor-pointer border border-brand-200"
             >
               <ArrowLeft className="size-3.5" />
               <span>검색으로 (ESC)</span>
@@ -242,7 +274,7 @@ export default function App() {
               <button
                 type="button"
                 onClick={openCurrentInBrowser}
-                className="flex items-center gap-1 rounded-lg px-2.5 py-1 text-xs font-bold text-ink-soft hover:bg-white hover:text-brand-700 transition-colors"
+                className="flex items-center gap-1 rounded-lg px-2.5 py-1 text-xs font-bold text-ink-soft hover:bg-white hover:text-brand-700 transition-colors cursor-pointer"
                 title="웹에서 크게 보기"
               >
                 <span>웹에서 크게</span>
@@ -251,7 +283,7 @@ export default function App() {
               <button
                 type="button"
                 onClick={() => getCurrentWindow().hide()}
-                className="grid size-7 place-items-center rounded-lg text-ink-faint hover:bg-white hover:text-ink transition-colors"
+                className="grid size-7 place-items-center rounded-lg text-ink-faint hover:bg-white hover:text-ink transition-colors cursor-pointer"
                 title="트레이로 숨기기"
               >
                 <Minus className="size-4" />
@@ -278,16 +310,17 @@ export default function App() {
           <form
             onSubmit={handleFormSubmit}
             data-tauri-drag-region
-            className="relative flex h-[62px] w-full items-center rounded-full border-2 border-brand-200 bg-white py-1.5 pl-6 pr-2 shadow-[var(--shadow-primary-soft)] focus-within:border-brand-500 transition-all cursor-move"
+            className="relative flex h-[68px] w-full items-center rounded-full border-2 border-brand-200 bg-white py-1.5 pl-6 pr-2 shadow-[var(--shadow-primary-soft)] focus-within:border-brand-500 transition-all cursor-move"
           >
             <input
               ref={inputRef}
               value={query}
               onChange={(e) => setQuery(e.target.value)}
               onKeyDown={handleInputKeyDown}
-              type="search"
+              type="text"
               autoComplete="off"
-              placeholder="궁금한 낱말이나 초성을 적어보세요 (예: ㄱㅇ)"
+              spellCheck={false}
+              placeholder="궁금한 낱말이나 초성을 적어보세요 (예: ㄷㄱ, ㄱㅇ)"
               className="h-full min-w-0 flex-1 bg-transparent text-xl sm:text-2xl text-ink outline-none placeholder:text-ink-faint leading-normal"
             />
 
@@ -297,18 +330,18 @@ export default function App() {
               <button
                 type="button"
                 onClick={clearQuery}
-                className="mr-1 grid size-7 place-items-center rounded-full text-ink-faint hover:bg-paper hover:text-ink transition-colors"
+                className="mr-1.5 grid size-7 place-items-center rounded-full text-ink-faint hover:bg-paper hover:text-ink transition-colors cursor-pointer"
                 title="검색어 지우기"
               >
                 <X className="size-4" />
               </button>
             ) : null}
 
-            <div className="flex items-center gap-0.5 mr-1 text-ink-faint">
+            <div className="flex items-center gap-0.5 mr-1.5 text-ink-faint">
               <button
                 type="button"
                 onClick={() => openUrl("https://dic.dgedu.link")}
-                className="grid size-8 place-items-center rounded-full hover:bg-paper hover:text-brand-700 transition-colors"
+                className="grid size-8 place-items-center rounded-full hover:bg-paper hover:text-brand-700 transition-colors cursor-pointer"
                 title="웹 사전 열기"
               >
                 <ExternalLink className="size-3.5" />
@@ -316,7 +349,7 @@ export default function App() {
               <button
                 type="button"
                 onClick={() => getCurrentWindow().hide()}
-                className="grid size-8 place-items-center rounded-full hover:bg-paper hover:text-ink transition-colors"
+                className="grid size-8 place-items-center rounded-full hover:bg-paper hover:text-ink transition-colors cursor-pointer"
                 title="트레이로 숨기기 (ESC)"
               >
                 <Minus className="size-3.5" />
@@ -336,17 +369,17 @@ export default function App() {
 
           {/* 답이 없을 때 띄우는 플로팅 토스트 */}
           {toast && (
-            <div className="pointer-events-none absolute left-1/2 top-[72px] z-50 -translate-x-1/2 whitespace-nowrap rounded-full bg-ink/90 px-4 py-2 text-xs font-bold text-white shadow-xl backdrop-blur-sm animate-fade-in">
+            <div className="pointer-events-none absolute left-1/2 top-[78px] z-50 -translate-x-1/2 whitespace-nowrap rounded-full bg-ink/90 px-4 py-2 text-xs font-bold text-white shadow-xl backdrop-blur-sm animate-fade-in">
               {toast}
             </div>
           )}
 
           {/* 자동완성 드롭다운 */}
           {suggestions.length > 0 && !loading && (
-            <div className="mt-2 overflow-hidden rounded-2xl border border-brand-200 bg-white/98 p-2 shadow-2xl backdrop-blur-md animate-fade-in">
+            <div className="mt-2 overflow-hidden rounded-2xl border-2 border-brand-200 bg-white p-2 shadow-2xl animate-fade-in">
               <div className="mb-1 flex items-center gap-1.5 px-3 py-1 text-xs font-bold text-brand-600">
                 <Sparkles className="size-3.5" />
-                <span>추천 낱말</span>
+                <span>추천 낱말 (Enter로 바로 보기)</span>
               </div>
               <div className="space-y-0.5">
                 {suggestions.map((item, idx) => {
@@ -495,10 +528,12 @@ function DedicatedResultCard({
 
           {primary?.example && (
             <div className="rounded-2xl border border-line/60 bg-paper/80 p-3.5 text-base">
-              <span className="font-bold text-brand-700 mr-2">예문</span>
-              <span className="text-ink-soft">
-                <HighlightWord text={primary.example} word={entry.word} />
-              </span>
+              <div className="flex items-start gap-2">
+                <span className="shrink-0 font-bold text-brand-700 mt-0.5">예문</span>
+                <span className="text-ink-soft whitespace-pre-line leading-relaxed">
+                  <HighlightWord text={primary.example} word={entry.word} />
+                </span>
+              </div>
             </div>
           )}
 
@@ -508,22 +543,31 @@ function DedicatedResultCard({
             </span>
             <button
               onClick={onOpenWeb}
-              className="flex items-center gap-1 text-xs font-bold text-brand-600 hover:text-brand-700"
+              className="flex items-center gap-1 text-xs font-bold text-brand-600 hover:text-brand-700 cursor-pointer"
             >
               <span>웹에서 크게 보기</span>
               <ExternalLink className="size-3" />
             </button>
           </div>
 
-
           {rest.length > 0 && (
             <details className="mt-2 text-xs">
               <summary className="cursor-pointer font-bold text-brand-600">다른 뜻 더 보기 ({rest.length})</summary>
               <ul className="mt-2 space-y-2">
                 {rest.map((s, idx) => (
-                  <li key={idx} className="rounded-lg bg-paper p-2 text-ink-soft">
-                    <span className="font-bold text-ink mr-1">{idx + 2}.</span>
-                    <span>{s.def}</span>
+                  <li key={idx} className="rounded-lg bg-paper p-2.5 text-ink-soft">
+                    <div className="font-medium text-ink">
+                      <span className="font-bold mr-1">{idx + 2}.</span>
+                      <span>{s.def}</span>
+                    </div>
+                    {s.example ? (
+                      <div className="mt-1.5 flex items-start gap-1 text-xs text-ink-soft">
+                        <span className="shrink-0 font-semibold text-brand-600 mr-0.5">예:</span>
+                        <span className="whitespace-pre-line leading-relaxed">
+                          <HighlightWord text={s.example} word={entry.word} />
+                        </span>
+                      </div>
+                    ) : null}
                   </li>
                 ))}
               </ul>
@@ -553,7 +597,7 @@ function HighlightWord({ text, word }: { text: string; word: string }) {
     <span>
       {parts.map((part, i) =>
         part === cleanWord ? (
-          <mark key={i} className="rounded-md bg-amber-100 text-amber-950 font-bold px-1.5 py-0.5">
+          <mark key={i} className="rounded-md bg-amber-100 text-amber-950 font-bold px-1.5 py-0.5 shadow-xs">
             {part}
           </mark>
         ) : (

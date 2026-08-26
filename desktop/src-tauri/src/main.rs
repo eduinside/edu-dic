@@ -22,12 +22,13 @@ struct AppState {
 fn resize_window(window: WebviewWindow, height: f64) -> Result<(), String> {
     window
         .set_size(Size::Logical(LogicalSize {
-            width: 440.0,
+            width: 480.0,
             height,
         }))
         .map_err(|e| e.to_string())?;
     Ok(())
 }
+
 
 
 
@@ -76,12 +77,15 @@ fn main() {
                 let _ = window.center();
             }
 
-            // 시스템 트레이 메뉴 구성
+            // 시스템 트레이 메뉴 구성 (맨 상단에 현재 앱 버전 표시)
+            let version_label = format!("어린이 쉬운 사전 v{}", app.package_info().version);
+            let item_version = MenuItem::with_id(app, "version", &version_label, false, None::<&str>)?;
             let item_show = MenuItem::with_id(app, "show", "사전 열기 (Ctrl+Alt+D)", true, None::<&str>)?;
             let item_web = MenuItem::with_id(app, "web", "웹 사전 열기 (dic.dgedu.link)", true, None::<&str>)?;
             let item_quit = MenuItem::with_id(app, "quit", "종료", true, None::<&str>)?;
 
-            let tray_menu = Menu::with_items(app, &[&item_show, &item_web, &item_quit])?;
+            let tray_menu = Menu::with_items(app, &[&item_version, &item_show, &item_web, &item_quit])?;
+
 
             TrayIconBuilder::with_id(TRAY_ID)
                 .menu(&tray_menu)

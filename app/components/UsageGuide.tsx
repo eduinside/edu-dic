@@ -46,9 +46,12 @@ export default function UsageGuide({ open, onClose }: { open: boolean; onClose: 
             <span className="text-2xl">💻</span>
             <div>
               <div className="text-sm font-extrabold text-brand-900">어린이 쉬운 사전 데스크탑</div>
-              <div className="text-xs text-brand-700">단축키(Ctrl+Alt+D)로 언제든 바로 검색 (Windows용)</div>
+              <div className="mt-0.5 text-xs text-brand-700">
+                단축키 <kbd className="rounded border border-brand-300 bg-white px-1.5 py-0.5 font-mono text-[11px] font-bold text-brand-800 shadow-2xs">Ctrl+Alt+D</kbd> 로 언제든 바로 검색 (Windows용)
+              </div>
             </div>
           </div>
+
 
           <a
             href="/api/download/desktop"

@@ -58,13 +58,13 @@ export default function App() {
     toastTimer.current = setTimeout(() => setToast(null), 2800);
   };
 
-  // 창 높이 동적 조절 (검색바 84px <-> 자동완성 380px <-> 결과 화면 560px)
+  // 창 높이 동적 조절 (검색바 88px <-> 자동완성 380px <-> 결과 화면 560px)
   useEffect(() => {
-    let targetHeight = 84;
+    let targetHeight = 88;
     if (result && result.status === "ok") {
       targetHeight = 560;
     } else if (suggestions.length > 0) {
-      targetHeight = Math.min(84 + suggestions.length * 44 + 20, 380);
+      targetHeight = Math.min(88 + suggestions.length * 44 + 20, 380);
     }
     invoke("resize_window", { height: targetHeight }).catch(() => {});
   }, [result, suggestions]);
@@ -306,13 +306,18 @@ export default function App() {
           </div>
         </div>
       ) : (
-        /* 2. 스팟라이트 캡슐형 검색창 화면 (440px 폭에 맞춘 컴팩트 디자인) */
+        /* 2. 스팟라이트 캡슐형 검색창 화면 */
         <div className="relative flex flex-col">
           <form
             onSubmit={handleFormSubmit}
             data-tauri-drag-region
-            className="relative flex h-[62px] w-full items-center rounded-full border-2 border-brand-300 bg-white py-1 pl-4 pr-1.5 shadow-[var(--shadow-primary-soft)] focus-within:border-brand-500 transition-all cursor-move"
+            className="relative flex h-[68px] w-full items-center rounded-full border-2 border-brand-300 bg-white py-1 pl-3 pr-1.5 shadow-[var(--shadow-primary-soft)] focus-within:border-brand-500 transition-all cursor-move"
           >
+            {/* 왼쪽 동그란 앱 아이콘 */}
+            <div className="mr-2.5 grid size-11 shrink-0 place-items-center rounded-full bg-brand-50 border border-brand-100 shadow-2xs select-none">
+              <span className="text-2xl leading-none">📖</span>
+            </div>
+
             <input
               ref={inputRef}
               value={query}
@@ -321,24 +326,24 @@ export default function App() {
               type="text"
               autoComplete="off"
               spellCheck={false}
-              placeholder="낱말이나 초성 (예: ㄷㄱ, ㄱㅇ)"
-              className="h-full min-w-0 flex-1 bg-transparent text-lg font-medium text-ink outline-none placeholder:text-ink-faint leading-normal"
+              placeholder="궁금한 낱말을 적어보세요"
+              className="h-full min-w-0 flex-1 bg-transparent text-xl font-extrabold text-ink outline-none placeholder:text-ink-faint placeholder:font-normal leading-normal"
             />
 
             {loading ? (
-              <Loader2 className="mr-1.5 size-4.5 animate-spin text-brand-600" />
+              <Loader2 className="mr-1.5 size-5 animate-spin text-brand-600" />
             ) : query ? (
               <button
                 type="button"
                 onClick={clearQuery}
-                className="mr-1 grid size-6 place-items-center rounded-full text-ink-faint hover:bg-paper hover:text-ink transition-colors cursor-pointer"
+                className="mr-1 grid size-7 place-items-center rounded-full text-ink-faint hover:bg-paper hover:text-ink transition-colors cursor-pointer"
                 title="검색어 지우기"
               >
-                <X className="size-3.5" />
+                <X className="size-4" />
               </button>
             ) : null}
 
-            <div className="flex items-center gap-0.5 mr-1 text-ink-faint">
+            <div className="flex items-center gap-0.5 mr-1.5 text-ink-faint">
               <button
                 type="button"
                 onClick={() => openUrl("https://dic.dgedu.link")}
@@ -357,7 +362,7 @@ export default function App() {
               </button>
             </div>
 
-            {/* 오른쪽 원형 파란색 검색 버튼 (확실한 배경색과 클릭 이벤트) */}
+            {/* 오른쪽 원형 파란색 검색 버튼 */}
             <button
               type="submit"
               onClick={() => handleFormSubmit()}
@@ -372,7 +377,7 @@ export default function App() {
 
           {/* 답이 없을 때 띄우는 플로팅 토스트 */}
           {toast && (
-            <div className="pointer-events-none absolute left-1/2 top-[72px] z-50 -translate-x-1/2 whitespace-nowrap rounded-full bg-ink/90 px-3.5 py-1.5 text-xs font-bold text-white shadow-xl backdrop-blur-sm animate-fade-in">
+            <div className="pointer-events-none absolute left-1/2 top-[76px] z-50 -translate-x-1/2 whitespace-nowrap rounded-full bg-ink/90 px-4 py-2 text-xs font-bold text-white shadow-xl backdrop-blur-sm animate-fade-in">
               {toast}
             </div>
           )}
@@ -392,11 +397,11 @@ export default function App() {
                       key={item}
                       onClick={() => submitSearch(item)}
                       onMouseEnter={() => setSelectedIndex(idx)}
-                      className={`flex w-full items-center justify-between rounded-xl px-3 py-1.5 text-left transition-colors cursor-pointer ${
+                      className={`flex w-full items-center justify-between rounded-xl px-3 py-2 text-left transition-colors cursor-pointer ${
                         isSelected ? "bg-brand-50 text-brand-700 font-bold" : "text-ink hover:bg-paper"
                       }`}
                     >
-                      <span className="text-sm font-semibold">{item}</span>
+                      <span className="text-base font-bold">{item}</span>
                       <span className="text-xs text-brand-600 font-medium opacity-80">&rarr;</span>
                     </button>
                   );
@@ -410,7 +415,7 @@ export default function App() {
   );
 }
 
-// 결과 전용 화면 컴포넌트 (440px 폭에 맞춘 최적화)
+// 결과 전용 화면 컴포넌트
 function DedicatedResultCard({
   entry,
   level,

@@ -1,7 +1,18 @@
-// *.pages.dev 기본 도메인으로 들어오면 정본 도메인(dic.dgedu.link)으로 301 리다이렉트한다.
-// (워크스페이스 규칙: pages.dev를 최종 URL로 안내하지 않음 — dev-hub의 workers.dev→dash.eduin.info
-// 리다이렉트와 동일 패턴.) 로컬 개발(localhost)·커스텀 도메인 자체 요청은 그대로 통과.
+// 전역 미들웨어: CORS 허용 및 *.pages.dev 리다이렉트
 export const onRequest: PagesFunction = async ({ request, next }) => {
+  // CORS Preflight 처리
+  if (request.method === "OPTIONS") {
+    return new Response(null, {
+      status: 204,
+      headers: {
+        "access-control-allow-origin": "*",
+        "access-control-allow-methods": "GET, HEAD, POST, OPTIONS",
+        "access-control-allow-headers": "*",
+        "access-control-max-age": "86400",
+      },
+    });
+  }
+
   const url = new URL(request.url);
   if (url.hostname.endsWith(".pages.dev")) {
     url.hostname = "dic.dgedu.link";
@@ -9,5 +20,13 @@ export const onRequest: PagesFunction = async ({ request, next }) => {
     url.protocol = "https:";
     return Response.redirect(url.toString(), 301);
   }
-  return next();
+
+  const response = await next();
+  const newHeaders = new Headers(response.headers);
+  newHeaders.set("access-control-allow-origin", "*");
+  return new Response(response.body, {
+    status: response.status,
+    statusText: response.statusText,
+    headers: newHeaders,
+  });
 };

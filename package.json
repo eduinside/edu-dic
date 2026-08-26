@@ -10,7 +10,9 @@
     "typecheck": "tsc --noEmit",
     "db:local": "wrangler d1 execute edu-link-db --local --file=db/schema.sql",
     "db:remote": "wrangler d1 execute edu-link-db --remote --file=db/schema.sql",
-    "pages:dev": "wrangler pages dev"
+    "pages:dev": "wrangler pages dev",
+    "deploy": "npm run build && wrangler pages deploy dist --project-name=edu-dic"
+
   },
   "dependencies": {
     "lucide-react": "^1.16.0",

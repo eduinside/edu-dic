@@ -77,7 +77,9 @@ export default function App() {
   const [level, setLevel] = useState<ReadingLevel>("dict");
   const [simplifying, setSimplifying] = useState(false);
   const [aiRelated, setAiRelated] = useState<string[]>([]);
+  const [communityTopic, setCommunityTopic] = useState<{ title: string; emoji: string; words: string[] } | null>(null);
   const [homoIndex, setHomoIndex] = useState(0);
+
   const [toast, setToast] = useState<string | null>(null);
   const [usageOpen, setUsageOpen] = useState(false);
   const requestSeq = useRef(0);
@@ -134,7 +136,9 @@ export default function App() {
     setLongLoading(false);
     setResult(null);
     setAiRelated([]);
+    setCommunityTopic(null);
     setHomoIndex(initialHomo);
+
     if (pushUrl) {
       const hashStr = initialHomo > 0 ? `#${initialHomo + 1}` : "";
       window.history.pushState({ q }, "", `/${encodeURIComponent(q)}${hashStr}`);
@@ -315,18 +319,22 @@ export default function App() {
     };
   }, [level, result, homoIndex]);
 
-  // 결과가 뜬 뒤 AI 관련어를 지연 호출(핵심 경로를 막지 않는다, D17-3).
+  // 결과가 뜬 뒤 AI 관련어 및 커스텀 낱말사전 소속 주제를 지연 호출(D17-3).
   useEffect(() => {
     if (result?.status !== "ok") return;
     let cancelled = false;
     const w = result.entry.word;
-    fetchRelated(w).then((words) => {
-      if (!cancelled) setAiRelated(words);
+    fetchRelated(w).then((res) => {
+      if (!cancelled) {
+        setAiRelated(res.words);
+        setCommunityTopic(res.communityTopic ?? null);
+      }
     });
     return () => {
       cancelled = true;
     };
   }, [result]);
+
 
   const toggleFav = useCallback(() => {
     if (!word) return;
@@ -486,18 +494,27 @@ export default function App() {
               onHomoIndexChange={handleHomoIndexChange}
             />
 
+            {/* 1. 내가 만든 주제 또는 기본 세트에 속한 경우 */}
             {related ? (
               <div className="mt-6">
                 <WordChips title={`${related.title} 낱말 더 보기`} emoji={related.emoji} words={related.words} onPick={search} />
               </div>
+            ) : communityTopic ? (
+              /* 2. 다른 사용자가 등록/공유한 커스텀 낱말사전 소속 주제 */
+              <div className="mt-6">
+                <WordChips title={`${communityTopic.title} (함께 만든 주제)`} emoji={communityTopic.emoji} words={communityTopic.words} onPick={search} />
+              </div>
             ) : null}
+
+            {/* 3. AI 추천 비슷한 낱말 */}
             {aiRelated.length > 0 ? (
               <div className="mt-6">
-                <WordChips title="비슷한 낱말" emoji="✨" words={aiRelated} onPick={search} />
+                <WordChips title="AI 비슷한 낱말" emoji="✨" words={aiRelated} onPick={search} />
               </div>
             ) : null}
           </div>
         </main>
+
       ) : page === "mywords" ? (
         <MyWordsPage
           onSearch={search}

@@ -38,17 +38,30 @@ export async function fetchEasySenses(word: string, homographIndex = 0): Promise
   }
 }
 
-// AI 관련어(krdict로 검증된 낱말만). 결과가 이미 뜬 뒤 비동기로 채워지는 보조 정보.
-export async function fetchRelated(word: string): Promise<string[]> {
+export interface RelatedResult {
+  words: string[];
+  communityTopic?: {
+    title: string;
+    emoji: string;
+    words: string[];
+  } | null;
+}
+
+// AI 관련어 및 커스텀 낱말사전 소속 주제 탐색 결과
+export async function fetchRelated(word: string): Promise<RelatedResult> {
   try {
     const res = await fetch(`/api/related?q=${encodeURIComponent(word)}`, { headers: { accept: "application/json" } });
-    if (!res.ok) return [];
-    const data = (await res.json()) as { words: string[] };
-    return data.words ?? [];
+    if (!res.ok) return { words: [] };
+    const data = (await res.json()) as RelatedResult;
+    return {
+      words: Array.isArray(data.words) ? data.words : [],
+      communityTopic: data.communityTopic || null,
+    };
   } catch {
-    return [];
+    return { words: [] };
   }
 }
+
 
 // 전역 인기 낱말(익명 집계). 실패해도 홈 화면은 빈 섹션으로 조용히 대체.
 export async function fetchPopular(): Promise<string[]> {

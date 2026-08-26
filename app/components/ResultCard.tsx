@@ -358,8 +358,8 @@ function ResultImage({
     image.url?.includes("pstatic.net");
 
   return (
-    <figure className={`w-full aspect-square shrink-0 ${sizeAtSm}`}>
-      <div className="relative size-full overflow-hidden rounded-2xl bg-paper">
+    <figure className="flex flex-col shrink-0 w-full sm:w-auto self-start">
+      <div className={`relative w-full aspect-square overflow-hidden rounded-2xl bg-paper ${sizeAtSm}`}>
         <img
           src={image.url}
           alt={`${word} 그림`}
@@ -372,14 +372,15 @@ function ResultImage({
           </div>
         ) : null}
       </div>
-      <div className="mt-1.5 flex flex-wrap items-center justify-between gap-1 text-[11px] text-ink-faint">
-        <figcaption>
+
+      <div className="mt-2 flex flex-wrap items-center justify-between gap-1.5 text-[11px] text-ink-faint w-full">
+        <figcaption className="max-w-[11rem] sm:max-w-[13rem] truncate" title={image.attribution}>
           {image.attribution}
           {isNaverImage ? <span className="ml-1 text-ink-faint/70">· 사진 검색</span> : null}
         </figcaption>
 
         {isNaverImage && onImageAction ? (
-          <div className="flex items-center gap-1">
+          <div className="flex items-center gap-1 shrink-0">
             <button
               type="button"
               onClick={() => handleAction("next")}
@@ -406,5 +407,6 @@ function ResultImage({
     </figure>
   );
 }
+
 
 

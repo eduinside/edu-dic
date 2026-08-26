@@ -113,3 +113,45 @@ export async function predictWordCandidate(env: Env, input: string): Promise<str
   return word && word !== clean && word.length <= 10 ? word : null;
 }
 
+/**
+ * 네이버 이미지 검색 후보 제목들을 사전 표제어 및 뜻풀이와 대조하여
+ * 가장 적절한 번호(1~N)를 선택합니다. 모두 부적합하면 0을 반환합니다. (타임아웃 1.2초)
+ */
+export async function selectBestImageIndex(
+  env: Env,
+  word: string,
+  def: string,
+  candidateTitles: string[],
+): Promise<number | null> {
+  if (candidateTitles.length === 0) return null;
+
+  const systemPrompt =
+    "너는 초등학생 어린이 사전의 이미지 적합성 심사관이다. 표제어와 뜻풀이에 정확히 들어맞는 사물/개념 사진 번호 1개만 숫자로 답하라. 광고, 쇼핑, 후기, 동음이의어 오매칭, 엉뚱한 맥락은 모두 배제하라. 적절한 후보가 하나도 없으면 0을 출력하라. 숫자 외의 글자는 절대 쓰지 마라.";
+
+  const userMessage = `낱말: ${word}\n사전 뜻풀이: ${def}\n\n후보 목록:\n${candidateTitles
+    .map((t, i) => `${i + 1}: ${t}`)
+    .join("\n")}\n\n가장 적합한 번호(숫자 1개):`;
+
+  const aiPromise = generateText(env, {
+    systemPrompt,
+    userMessage,
+    temperature: 0.1,
+  });
+
+  const timeoutPromise = new Promise<null>((resolve) => setTimeout(() => resolve(null), 1200));
+
+  try {
+    const raw = await Promise.race([aiPromise, timeoutPromise]);
+    if (!raw) return null;
+    const match = raw.match(/\d+/);
+    if (match) {
+      const idx = parseInt(match[0], 10);
+      return isNaN(idx) ? null : idx;
+    }
+    return null;
+  } catch {
+    return null;
+  }
+}
+
+

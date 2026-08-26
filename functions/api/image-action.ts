@@ -71,7 +71,10 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
       ? homographImageQuery(word, currentSense)
       : imageSearchQuery(word, currentSense);
 
-    const nextImage = query ? await searchNaverImage(naverId, naverKey, query, blockedList) : null;
+    const nextImage = query
+      ? await searchNaverImage(naverId, naverKey, query, blockedList, { word, def: currentSense, env })
+      : null;
+
 
     if (homographs && homographs[homoIndex]) {
       homographs[homoIndex].image = nextImage;

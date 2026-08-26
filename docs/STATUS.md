@@ -23,15 +23,51 @@
 - 컴포넌트: `SearchBox`, `ResultCard`, `WordChips`, `Modal`, `UsageGuide`, `ResourceLinks`
 - localStorage 기반 최근 검색/즐겨찾기 (`app/lib/storage.ts`)
 
-## 2026-08-26 — M2 완료 및 사용자 관심 주제 AI 낱말 생성 추가
+## 2026-08-26 — M2 완료 및 사용자 관심 주제 AI 생성·공유 & UI/UX 고도화
 
-M2(자주 찾는 낱말 D1 집계 고도화, 11개 낱말 배우기 코너 확장) 및 PLAN.md §13 향후 로드맵(사용자 관심 주제 추가 + AI 낱말 추천 & krdict 사전 접지 검증) 구현 완료.
+M2(자주 찾는 낱말 D1 집계 고도화, 11개 낱말 배우기 코너 확장) 및 PLAN.md §13 향후 로드맵(사용자 관심 주제 추가 + 네이버 웹문서 연계 AI 어휘 수집 & krdict 사전 접지 검증 & dgedu.link 공유) 전면 구현 및 UI/UX 디테일 개선 완료.
 
-**M2 + 로드맵 주요 구현 내용**
-- `functions/api/popular.ts` & D1 `edudic_popular_daily`: 최근 30일 일일 버킷 기반 전역 인기 낱말 집계
-- `app/lib/words.ts`: 초등 11개 주제별 어휘 세트 구축 (자연·학교·감정·음식·동물·탈것·몸·옷·동네·놀이 등)
-- `functions/api/topic-words.ts` [NEW]: 사용자 입력 주제에 대한 AI(Timely/Gemini) 낱말 생성 및 krdict `searchWord` 사전 접지(Grounding) 실존 검증
-- `app/lib/storage.ts`: `edudic.customTopics` 기반 커스텀 주제 CRUD 지원 (로그인 없는 D6 원칙)
-- UI: `/my` 나의 낱말사전 내 `[+ 새 주제]` 생성 모달, AI 낱말 생성 및 수동 추가/삭제, 이모지 선택, 카드 아코디언 및 삭제 기능 연동
+**1. M2 — 낱말 코너 및 집계 고도화**
+- `functions/api/popular.ts` & D1 `edudic_popular_daily`: 최근 30일 일일 버킷 기반 전역 인기 낱말 집계 및 랭킹 조회
+- `app/lib/words.ts`: 초등 11개 주제별 어휘 세트 구축 (자연·학교·감정·우리집·음식·동물·탈것·몸·옷·동네·놀이 등 300+개 검증 어휘)
+- `/my` 나의 낱말사전: 개인 로컬 집계(내가 자주 찾은 낱말)와 전역 인기 분리
 
-**다음 단계**: M3(접근성 및 오프라인/에러 UX 다듬기, 도메인 연결) — [PLAN.md §8](PLAN.md) 참고.
+**2. 사용자 정의 관심 주제 추가 & AI 낱말 자동 생성 (PLAN.md §13)**
+- `functions/api/topic-words.ts` [NEW]:
+  - **네이버 웹문서 API(`searchNaverWeb`, NCP search/v1/webkr) 연계**: '24절기', '전통 악기' 등 특정/복합 주제 입력 시 웹문서 스니펫을 AI 참고 컨텍스트로 제공 → 뻔한 상위어(봄/여름 등) 대신 구체적 세부 낱말(입춘, 경칩, 하지, 동지 등)을 정확히 포착
+  - **krdict 사전 접지(Grounding)**: AI 후보 낱말을 국립국어원 사전 API(`searchWord`)로 1:1 실존 검증 후 반환 (환각 및 미수록 단어 원천 방지)
+- `im-not-ai` 문구 정제: 자연스럽고 신뢰감 있는 교육용 표현으로 전면 수정 (*"궁금하거나 배우고 싶은 주제를 적으면, 알맞은 쉬운 낱말을 사전에서 골라 모아줘요."*, *"사전에서 낱말 모으기"*)
+- `functions/api/share-topic.ts` [NEW] & `dgedu.link` 단축 URL 공유:
+  - `DGEDU_LINK_API_KEY` 연동으로 커스텀 주제 단축 공유 링크 생성
+  - 공유 링크(`?shareTopic=...`) 진입 또는 주제 추가 시 해당 카드에 **부드러운 번쩍임(플래시/펄스) 애니메이션** 적용
+
+**3. 랜딩 및 낱말 결과 화면 UI/UX 개선**
+- **랜딩 레이아웃 여백 & 하단 Footer**:
+  - 검색창 영역 패딩 대폭 확보: 상단 100px+ (`pt-[100px] sm:pt-[120px]`), 하단 180px+ (`pb-[180px] sm:pb-[200px]`)
+  - "함께 보면 좋은 곳"을 `min-h-[calc(100vh-3.5rem)] flex flex-col justify-between` 구조와 `mt-auto`로 화면 최하단(Footer 영역)에 안정적으로 배치
+- **낱말 화면 디테일**:
+  - 표제어 헤더 하단 여백 확대 (`mt-8 sm:mt-10`)
+  - **쉬운 말 AI 프롬프트 및 후처리(`cleanEasyDef`) 개선**: `~를 말하는 거야` 등 불필요한 설명형 어미를 배제하고 `"아직 어린 소."` 같은 사전식 간결한 명사구 종결 보장
+  - **쉬운 예문 생성 & 정확한 낱말 하이라이트**: "쉬운 말로" 모드 시 어린이 일상 예문을 동시 생성하며, 뒤따르는 조사를 제외하고 해당 낱말만 정확하게 분리하여 형광펜 하이라이트(`HighlightWord`) 적용
+
+## 2026-08-26 — M3 & M4 완료 (웹 다듬기·초성 자동완성 & '어린이 쉬운 사전 데스크탑' 스팟라이트 앱)
+
+PLAN.md의 M3(초성 검색 및 실시간 자동완성, 접근성·에러 UX 다듬기, im-not-ai 문구 정제) 및 M4(Tauri v2 기반 '어린이 쉬운 사전 데스크탑' PC 스팟라이트 앱, 트레이 상주, 전역 단축키, R2 기반 NSIS 자동 업데이트) 전면 구현 완료.
+
+**1. M3 — 초성 검색 & 실시간 자동완성 & im-not-ai 문구 정제**
+- `functions/lib/choseong.ts` [NEW]: 한글 음절 유니코드 분해 공식 기반 초성 추출(`extractChoseong`) 및 초성/접두사 매칭 판별(`matchesChoseongOrPrefix`, `isChoseongOnly`)
+- `functions/api/suggest.ts` [NEW]: `GET /api/suggest?q=...` — D1 `edudic_dict_cache`에 누적된 낱말 + 초등 11개 주제 300+개 큐레이션 단어 대상 초성/접두사 실시간 자동완성 API
+- `app/components/SearchBox.tsx`: 디바운스된 실시간 자동완성 드롭다운 (키보드 ↑/↓/Enter/ESC 지원, 클릭 시 바로 사전 조회)
+- `app/components/UsageGuide.tsx`: PC 스팟라이트 앱 소개 및 바로 다운로드 링크 연계, 전체 문구 친근하고 단정한 교육적 어투(`im-not-ai`) 적용
+
+**2. M4 — '어린이 쉬운 사전 데스크탑' (PC 스팟라이트 앱)**
+- `desktop/` [NEW]: `edu-team`의 검증된 Tauri v2 아키텍처 패턴 적용
+  - 앱 이름: **어린이 쉬운 사전 데스크탑** (`link.dgedu.dic.desktop`)
+  - **전역 단축키(`Ctrl+Shift+D`)**: 언제 어디서든 화면 중앙에 슬림 스팟라이트 검색창 노출
+  - **시스템 트레이 상주**: 닫기(X)/ESC 시 백그라운드 숨김, 트레이 메뉴(사전 열기, 웹 사전 열기, 종료)
+  - **스팟라이트 검색 → 웹 대형 결과 연동**: 슬림 검색바에서 낱말이나 초성 입력 후 Enter 또는 클릭 시, 웹 사전(`/낱말`)이 브라우저에서 대형 화면으로 즉시 열리며 스팟라이트 창은 자동 숨김
+  - **R2 기반 NSIS 배포 & 자동 업데이트**:
+    - `functions/download/desktop.ts` (`GET /download/desktop`) — 최신 Windows 설치 `.exe` 다운로드
+    - `functions/download/desktop-latest.json.ts` (`GET /download/desktop-latest.json`) — Tauri Updater용 매니페스트 서빙
+    - `scripts/release-desktop.sh` — NSIS 빌드, minisign 암호화 서명 및 Cloudflare R2(`edu-dic-downloads`) 업로드 자동화 스크립트
+

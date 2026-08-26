@@ -10,6 +10,7 @@ export interface Env {
   TIMELY_API_KEY?: string; // AI 게이트웨이(오타 교정·쉬운 말 변환·관련어). 없으면 해당 AI 기능만 생략.
   GEMINI_API_KEY?: string; // Timely 실패 시 직접 폴백(선택).
   DGEDU_LINK_API_KEY?: string; // dgedu.link 단축 링크 생성 API 키 (공유용)
+  DOWNLOADS?: R2Bucket; // R2 버킷 (데스크탑 설치 프로그램 및 업데이트 매니페스트)
 }
 
 export function json(data: unknown, init?: ResponseInit): Response {
@@ -22,3 +23,6 @@ export function json(data: unknown, init?: ResponseInit): Response {
     },
   });
 }
+
+export const jsonResponse = json;
+

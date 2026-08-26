@@ -159,20 +159,20 @@ export default function ResultCard({
   );
 }
 
-// 예문 속 표제어 하이라이트(형광펜 효과)
+// 예문 속 표제어 하이라이트(형광펜 효과) — 조사 제외 해당 낱말만 정확히 강조
 function HighlightWord({ text, word }: { text: string; word: string }) {
   const cleanWord = word.replace(/[0-9]/g, "").trim();
   if (!cleanWord || !text) return <span>{text}</span>;
 
-  // 단어(또는 조사 결합 어절)를 감지하여 부드러운 형광펜 효과 적용
-  const regex = new RegExp(`(${cleanWord}[가-힣]*)`, "g");
+  // 정확한 단어(cleanWord)만 분리하여 하이라이트 적용 (뒤따르는 조사는 제외)
+  const regex = new RegExp(`(${cleanWord})`, "g");
   const parts = text.split(regex);
 
   return (
     <span>
       {parts.map((part, i) =>
-        part.startsWith(cleanWord) ? (
-          <mark key={i} className="rounded-md bg-amber-100/90 text-amber-950 font-bold px-1.5 py-0.5 mx-0.5 shadow-xs">
+        part === cleanWord ? (
+          <mark key={i} className="rounded-md bg-amber-100/90 text-amber-950 font-bold px-1.5 py-0.5 shadow-xs">
             {part}
           </mark>
         ) : (

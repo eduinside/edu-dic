@@ -14,7 +14,16 @@
       "database_name": "edu-link-db",
       "database_id": "e5fa6f54-6063-48f9-9cf3-0517381dd005"
     }
+  ],
+
+  // 데스크탑 앱 설치파일 및 업데이트 배포용 R2 버킷
+  "r2_buckets": [
+    {
+      "binding": "DOWNLOADS",
+      "bucket_name": "edu-dic-downloads"
+    }
   ]
+
 
   // 비밀값(KRDICT_API_KEY, ENCYKOREA_API_KEY, X-NCP-APIGW-API-KEY-ID/KEY, TIMELY_API_KEY 등)은
   // 코드/설정에 넣지 않는다:

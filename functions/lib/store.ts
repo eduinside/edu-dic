@@ -52,3 +52,17 @@ export async function getPopular(env: Env, limit = 12): Promise<string[]> {
     .all<{ word: string }>();
   return (res.results ?? []).map((r) => r.word);
 }
+
+// 자동완성 및 초성 검색용: D1 캐시에 이미 저장된 표제어 목록 조회
+export async function getCachedWords(env: Env, limit = 1000): Promise<string[]> {
+  try {
+    const res = await env.DB
+      .prepare(`SELECT word FROM edudic_dict_cache ORDER BY fetched_at DESC LIMIT ?`)
+      .bind(limit)
+      .all<{ word: string }>();
+    return (res.results ?? []).map((r) => r.word);
+  } catch {
+    return [];
+  }
+}
+

@@ -103,3 +103,20 @@ export async function createTopicShareLink(topic: {
     return null;
   }
 }
+
+// 초성 및 낱말 자동완성 추천 목록 조회
+export async function fetchSuggestions(query: string): Promise<string[]> {
+  const q = query.trim();
+  if (!q) return [];
+  try {
+    const res = await fetch(`/api/suggest?q=${encodeURIComponent(q)}`, {
+      headers: { accept: "application/json" },
+    });
+    if (!res.ok) return [];
+    const data = (await res.json()) as { suggestions?: string[] };
+    return data.suggestions ?? [];
+  } catch {
+    return [];
+  }
+}
+

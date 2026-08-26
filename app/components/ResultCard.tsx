@@ -338,7 +338,11 @@ function ResultImage({
   onImageAction?: (action: "next" | "hide", currentUrl: string) => Promise<void>;
 }) {
   const [loading, setLoading] = useState(false);
-  const sizeAtSm = big ? "sm:size-80 lg:size-[26rem]" : "sm:size-56 lg:size-64";
+  // 일반 모드: 288px(sm) -> 320px(md) -> 352px(lg) / 큰 화면 모드: 384px(sm) -> 480px(lg)
+  const sizeAtSm = big
+    ? "sm:w-96 sm:h-96 lg:w-[30rem] lg:h-[30rem]"
+    : "sm:w-72 sm:h-72 md:w-80 md:h-80 lg:w-[22rem] lg:h-[22rem]";
+
   if (!image) return null;
 
   const handleAction = async (action: "next" | "hide") => {
@@ -359,25 +363,26 @@ function ResultImage({
 
   return (
     <figure className="flex flex-col shrink-0 w-full sm:w-auto self-start">
-      <div className={`relative w-full aspect-square overflow-hidden rounded-2xl bg-paper ${sizeAtSm}`}>
+      <div className={`relative w-full aspect-square overflow-hidden rounded-3xl bg-paper shadow-2xs ${sizeAtSm}`}>
         <img
           src={image.url}
           alt={`${word} 그림`}
-          className="size-full object-contain"
+          className="size-full object-contain p-1"
           loading="eager"
         />
         {loading ? (
           <div className="absolute inset-0 flex items-center justify-center bg-white/70 backdrop-blur-xs">
-            <Loader2 className="size-6 animate-spin text-brand-600" />
+            <Loader2 className="size-8 animate-spin text-brand-600" />
           </div>
         ) : null}
       </div>
 
-      <div className="mt-2 flex flex-wrap items-center justify-between gap-1.5 text-[11px] text-ink-faint w-full">
-        <figcaption className="max-w-[11rem] sm:max-w-[13rem] truncate" title={image.attribution}>
+      <div className="mt-2.5 flex flex-wrap items-center justify-between gap-2 text-[12px] text-ink-faint w-full">
+        <figcaption className="max-w-[14rem] sm:max-w-[18rem] truncate" title={image.attribution}>
           {image.attribution}
           {isNaverImage ? <span className="ml-1 text-ink-faint/70">· 사진 검색</span> : null}
         </figcaption>
+
 
         {isNaverImage && onImageAction ? (
           <div className="flex items-center gap-1 shrink-0">

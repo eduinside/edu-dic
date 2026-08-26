@@ -4,10 +4,13 @@ use std::sync::Mutex;
 use tauri::{
     menu::{Menu, MenuItem},
     tray::TrayIconBuilder,
-    AppHandle, Emitter, Manager, PhysicalPosition, PhysicalSize, Size, WebviewWindow,
+    AppHandle, Manager, PhysicalSize, Size, WebviewWindow,
 };
 use tauri_plugin_autostart::MacosLauncher;
 use tauri_plugin_global_shortcut::{GlobalShortcutExt, Shortcut};
+use tauri_plugin_opener::OpenerExt;
+
+
 
 const TRAY_ID: &str = "edu-dic-tray";
 const WEB_URL: &str = "https://dic.dgedu.link";

@@ -50,13 +50,14 @@ export default function UsageGuide({ open, onClose }: { open: boolean; onClose: 
             </div>
           </div>
           <a
-            href="/download/desktop"
+            href="/api/download/desktop"
             download="어린이 쉬운 사전 데스크탑 설치.exe"
             className="flex shrink-0 items-center gap-1.5 rounded-xl bg-brand-600 px-3.5 py-2 text-xs font-bold text-white shadow-sm hover:bg-brand-700 transition-colors"
           >
             <Download className="size-3.5" aria-hidden />
             <span>PC 앱 다운로드</span>
           </a>
+
         </div>
 
         <div className="flex gap-3 rounded-xl border border-brand-100 bg-paper p-4">

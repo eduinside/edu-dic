@@ -74,7 +74,10 @@ npm install
 npm run tauri dev
 
 # 데스크탑 설치 프로그램(NSIS) 빌드 및 디지털 서명
+# updater.key는 빈 비밀번호로 암호화되어 있음 - PASSWORD 변수를 반드시 빈 문자열로 설정해야
+# 함(안 하면 makensis 단계에서 비대화형 세션이 비밀번호 프롬프트 대기 상태로 멈춤).
 $env:TAURI_SIGNING_PRIVATE_KEY = (Get-Content "src-tauri\updater.key" -Raw).Trim()
+$env:TAURI_SIGNING_PRIVATE_KEY_PASSWORD = ""
 npx tauri build
 ```
 

@@ -5,6 +5,9 @@ set -euo pipefail
 
 cd "$(dirname "$0")/../desktop"
 
+export TAURI_SIGNING_PRIVATE_KEY=$(cat src-tauri/updater.key)
+export TAURI_SIGNING_PRIVATE_KEY_PASSWORD=""
+
 echo "==> 1. 데스크탑 앱 빌드 (NSIS)..."
 npm run build
 npm run tauri:build

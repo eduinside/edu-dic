@@ -11,8 +11,7 @@
     "db:local": "wrangler d1 execute edu-link-db --local --file=db/schema.sql",
     "db:remote": "wrangler d1 execute edu-link-db --remote --file=db/schema.sql",
     "pages:dev": "wrangler pages dev",
-    "deploy": "npm run build && wrangler pages deploy dist --project-name=edu-dic"
-
+    "deploy": "npm run build && wrangler pages deploy dist --project-name=edu-dic-web"
   },
   "dependencies": {
     "lucide-react": "^1.16.0",

@@ -2,7 +2,9 @@
   // 어린이 쉬운 사전 — Cloudflare Pages (정적 + Functions).
   // D1은 신규 생성하지 않고 공유 'edu-link-db' 사용(계획서 D12). 테이블은 edudic_ 접두어(db/schema.sql).
   "$schema": "node_modules/wrangler/config-schema.json",
-  "name": "edu-dic",
+  // GitHub(eduinside/edu-dic) 연동 Pages 프로젝트. 예전 직접 업로드 프로젝트 "edu-dic"는 Git 연동으로 바꿀 수 없어
+  // 새로 만들었다(2026-10-09). main에 푸시하면 Cloudflare가 빌드·배포한다.
+  "name": "edu-dic-web",
   "compatibility_date": "2026-05-25",
   "compatibility_flags": ["nodejs_compat"],
   "pages_build_output_dir": "./dist",

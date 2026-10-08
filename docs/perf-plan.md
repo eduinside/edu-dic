@@ -88,3 +88,6 @@ AI(Timely, 한국 PC 기준, 쉬운 말 JSON 1건):
 
 Git 연동 배포 뒤 15분 동안 가벼운 요청을 계속 보냈지만 `cf-placement`는 `local-DUB/NRT/MIA`에 머물렀다(트래픽이 적어 Smart Placement 분석이 시작되지 않는 것으로 보임). 엣지도 요청마다 더블린·도쿄·마이애미로 바뀌었다.
 → `placement: { region: "aws:ap-northeast-2" }`(AWS 서울 리전과 지연이 가장 짧은 데이터센터에서 실행). 리전 힌트는 트래픽 분석 없이 바로 적용된다. Pages Functions 지원은 문서에 명시돼 있지 않아 배포 후 `cf-placement` 헤더로 확인한다.
+
+**결과(같은 날)**: Pages Git 빌드가 두 번 실패했다. ① `{ region }` → `"placement.mode" is a required field` ② `{ mode: "targeted", region }` → 실패(빌드 환경 wrangler가 targeted를 모름). 로컬 wrangler 4.126 직접 업로드는 통과하지만 Git 연동을 유지하려고 `smart`로 되돌렸다.
+같은 Functions가 `*.edu-dic.pages.dev`로 부르면 항상 ICN(0.1~0.16초), `dic.dgedu.link`로 부르면 NRT·PDX·DUB·LAX·ATL 등(0.65~1.1초) — 느림의 근본 원인은 커스텀 도메인 존(dgedu.link, 무료 플랜)의 한국 라우팅이다.

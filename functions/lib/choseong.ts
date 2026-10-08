@@ -60,3 +60,36 @@ export function matchesChoseongOrPrefix(word: string, query: string): boolean {
 
   return cleanWord.startsWith(cleanQuery) || cleanWord.includes(cleanQuery);
 }
+
+/**
+ * 자동완성 순위. 서버(/api/suggest)와 브라우저(SearchBox 즉시 추천)가 같은 규칙을 쓴다.
+ * 1순위: 표제어가 검색어로 시작(완전 일치는 맨 앞) / 2순위: 초성이 검색어 초성으로 시작 / 3순위: 표제어·초성에 포함.
+ * 같은 순위 안에서는 words에 들어온 순서를 지킨다.
+ */
+export function rankSuggestions(words: Iterable<string>, query: string, limit = 10): string[] {
+  const q = query.trim().toLowerCase();
+  if (!q) return [];
+  const isChoseong = isChoseongOnly(q);
+  const qChoseong = extractChoseong(q);
+  const exactPrefix: string[] = [];
+  const choseongPrefix: string[] = [];
+  const contains: string[] = [];
+
+  for (const word of new Set(words)) {
+    const wordLower = word.toLowerCase();
+    const wordChoseong = extractChoseong(wordLower);
+    if (isChoseong) {
+      if (wordChoseong.startsWith(q)) choseongPrefix.push(word);
+      else if (wordChoseong.includes(q)) contains.push(word);
+    } else if (wordLower === q) {
+      exactPrefix.unshift(word);
+    } else if (wordLower.startsWith(q)) {
+      exactPrefix.push(word);
+    } else if (wordChoseong.startsWith(qChoseong)) {
+      choseongPrefix.push(word);
+    } else if (wordLower.includes(q) || matchesChoseongOrPrefix(word, q)) {
+      contains.push(word);
+    }
+  }
+  return [...exactPrefix, ...choseongPrefix, ...contains].slice(0, limit);
+}

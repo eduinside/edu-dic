@@ -1,0 +1,4 @@
+# 빌드 결과 JS·CSS는 파일 이름에 내용 해시가 들어가므로(index-XXXX.js) 1년 보관해도 안전하다.
+# 기본값(4시간 뒤 서버에 다시 확인)이면 재방문 때마다 파리 엣지까지 왕복이 생긴다(docs/perf-plan.md §4).
+/assets/*
+  Cache-Control: public, max-age=31536000, immutable

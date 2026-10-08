@@ -32,6 +32,7 @@ import {
   fetchTopicWords,
   getRememberedLookup,
   lookupWord,
+  noteViewed,
   rememberLookup,
   requestImageAction,
 } from "./lib/api.ts";
@@ -189,7 +190,9 @@ export default function App() {
     const longTimer = setTimeout(() => {
       if (seq === requestSeq.current) setLongLoading(true);
     }, 1200);
-    const r = getRememberedLookup(q) ?? (await lookupWord(q));
+    const remembered = getRememberedLookup(q);
+    if (remembered) noteViewed(q, remembered); // 미리 받아 둔 결과면 여기서 처음 센다
+    const r = remembered ?? (await lookupWord(q));
     clearTimeout(longTimer);
     if (seq !== requestSeq.current) return; // 그 사이 다른 낱말을 검색했으면 이 결과는 버린다
     setResult(r);
@@ -218,6 +221,11 @@ export default function App() {
       );
     });
   }, []);
+
+  // 브라우저 탭·방문 기록·북마크에 낱말이 보이게
+  useEffect(() => {
+    document.title = word && page === "home" ? `${word} - 어린이 쉬운 사전` : "어린이 쉬운 사전";
+  }, [word, page]);
 
   // 화면 결과(쉬운 말·사진 교체가 반영된 것)를 세션 메모리에 남겨 같은 낱말을 다시 찾으면 바로 보여 준다.
   useEffect(() => {
@@ -474,7 +482,7 @@ export default function App() {
           {/* 모바일: 압축된 한 줄, 아이콘만(현행 유지) */}
           <div className="flex min-h-10 flex-nowrap items-center gap-1.5 sm:hidden">
             <button onClick={() => goHome()} className="flex shrink-0 items-center gap-1.5 font-extrabold text-brand-700">
-              <img src="/logo-192.png" alt="" className="size-7 rounded-lg object-contain" width={32} height={32} />
+              <img src="/logo-64.png" alt="" className="size-7 rounded-lg object-contain" width={32} height={32} />
               <span className="text-base">어린이 쉬운 사전</span>
             </button>
             <div className="ml-auto flex shrink-0 flex-nowrap items-center gap-0.5">
@@ -518,7 +526,7 @@ export default function App() {
               사전 그대로|쉬운 말로 토글을 막대 가운데(절대 배치, 좌우 폭 비대칭과 무관하게 진짜 가운데)로 옮긴다. */}
           <div className="relative hidden min-h-10 flex-nowrap items-center gap-3 sm:flex">
             <button onClick={() => goHome()} className="flex shrink-0 items-center gap-2 font-extrabold text-brand-700">
-              <img src="/logo-192.png" alt="" className="size-8 rounded-lg object-contain" width={32} height={32} />
+              <img src="/logo-64.png" alt="" className="size-8 rounded-lg object-contain" width={32} height={32} />
               <span className="text-lg">어린이 쉬운 사전</span>
             </button>
 

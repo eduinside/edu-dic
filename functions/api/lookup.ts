@@ -78,6 +78,9 @@ export const onRequestGet: PagesFunction<Env> = async ({ request, env, waitUntil
 
   // defer=1: 웹 — 뜻 먼저 돌려주고 사진은 /api/image로 따로 채운다. 없으면(데스크탑 앱) 사진까지 채워서 응답.
   const deferImages = url.searchParams.get("defer") === "1";
+  // prefetch=1: 낱말에 손가락·마우스가 닿는 순간 미리 받아 두는 요청 — 실제로 본 게 아니라 인기 집계에서 뺀다.
+  // 실제로 열면 화면이 POST /api/popular 로 한 번 센다.
+  const prefetch = url.searchParams.get("prefetch") === "1";
 
   try {
     const entry = await getOrFetchEntry(env, q, { waitUntil, refresh, deferImages });
@@ -86,7 +89,7 @@ export const onRequestGet: PagesFunction<Env> = async ({ request, env, waitUntil
       const suggestion = await suggestCorrection(env, q).catch(() => undefined);
       return json({ status: "not_found", word: q, suggestion });
     }
-    waitUntil(bumpPopular(env, q).catch(() => {}));
+    if (!prefetch) waitUntil(bumpPopular(env, q).catch(() => {}));
     return json({ status: "ok", entry });
   } catch (e) {
     if (e instanceof KrdictError) {

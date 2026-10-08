@@ -3,9 +3,10 @@
 @import "tailwindcss";
 
 @theme {
-  /* Typography — Pretendard(있으면) → 시스템 한글 폴백 */
-  --font-sans: "Pretendard Variable", Pretendard, -apple-system,
-    "Apple SD Gothic Neo", "Malgun Gothic", system-ui, sans-serif;
+  /* Typography — 기기 기본 글꼴만 쓴다(글꼴 파일을 내려받지 않음). Windows 맑은 고딕, macOS·iOS 애플 SD 산돌고딕 Neo,
+     Android·ChromeOS는 system-ui(Noto Sans CJK KR 등). */
+  --font-sans: -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", "Malgun Gothic", "맑은 고딕", system-ui,
+    "Noto Sans KR", sans-serif;
   --font-display: var(--font-sans);
   --font-mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, monospace;
 
@@ -51,6 +52,8 @@
 
 html, body { min-height: 100%; }
 body { background: var(--gradient-page); color: var(--color-ink); }
+/* 한국어는 기본값이면 낱말 중간에서도 줄을 바꾼다("용 / 기를"). 어린이가 읽기 쉽게 어절 단위로 바꾼다. */
+body { word-break: keep-all; overflow-wrap: break-word; }
 
 /* 배경 유틸 */
 .page-gradient-bg { background: var(--gradient-page); }

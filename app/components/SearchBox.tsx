@@ -1,6 +1,22 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Search, Sparkles } from "lucide-react";
 import { fetchSuggestions } from "../lib/api.ts";
+import { prefetchProps } from "../lib/prefetch.ts";
+import * as store from "../lib/storage.ts";
+import { WORD_SETS } from "../lib/words.ts";
+import { rankSuggestions } from "../../functions/lib/choseong.ts";
+
+// 서버를 기다리지 않고 바로 띄울 추천 낱말 풀 — 내가 찾은·즐겨찾기·자주 찾은 낱말, 내 주제, 기본 주제 300여 개.
+// 서버(/api/suggest)는 여기에 사전 캐시 1,000개·전체 인기 낱말을 더해 뒤이어 합친다.
+function localWordPool(): string[] {
+  return [
+    ...store.getRecent(),
+    ...store.getFavorites(),
+    ...store.getMostSearched(),
+    ...store.getCustomWordSets().flatMap((s) => s.words),
+    ...WORD_SETS.flatMap((s) => s.words),
+  ];
+}
 
 interface Props {
   onSearch: (word: string) => void;
@@ -17,6 +33,8 @@ export default function SearchBox({ onSearch, initial = "", big = false, autoFoc
   const inputRef = useRef<HTMLInputElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const debounceTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  const suggestSeq = useRef(0); // 늦게 도착한 이전 글자의 추천 목록이 최신 목록을 덮지 않게
+  const localPool = useMemo(localWordPool, []);
 
   useEffect(() => {
     if (autoFocus) inputRef.current?.focus();
@@ -28,27 +46,32 @@ export default function SearchBox({ onSearch, initial = "", big = false, autoFoc
     setSuggestions([]);
   }, [initial]);
 
-  // 디바운스된 자동완성 제안 호출
+  // 자동완성: 기기 안 낱말 풀로 바로 보여 주고, 디바운스 뒤 서버 결과를 같은 순위 규칙으로 합친다.
   useEffect(() => {
     clearTimeout(debounceTimer.current);
     const trimmed = value.trim();
     if (!trimmed || trimmed === initial.trim()) {
+      suggestSeq.current++;
       setSuggestions([]);
       setIsOpen(false);
       setSelectedIndex(-1);
       return;
     }
 
+    const show = (list: string[]) => {
+      setSuggestions(list);
+      setIsOpen(list.length > 0);
+      setSelectedIndex(-1);
+    };
+    const local = rankSuggestions(localPool, trimmed, 10);
+    show(local);
+
+    const seq = ++suggestSeq.current;
     debounceTimer.current = setTimeout(async () => {
-      const list = await fetchSuggestions(trimmed);
-      if (list.length > 0) {
-        setSuggestions(list);
-        setIsOpen(true);
-        setSelectedIndex(-1);
-      } else {
-        setSuggestions([]);
-        setIsOpen(false);
-      }
+      const remote = await fetchSuggestions(trimmed);
+      if (seq !== suggestSeq.current || remote.length === 0) return;
+      const merged = rankSuggestions([...local, ...remote], trimmed, 10);
+      if (merged.join() !== local.join()) show(merged);
     }, 120);
 
     return () => clearTimeout(debounceTimer.current);
@@ -66,6 +89,7 @@ export default function SearchBox({ onSearch, initial = "", big = false, autoFoc
   }, []);
 
   function handleSelect(word: string) {
+    suggestSeq.current++;
     setValue(word);
     setIsOpen(false);
     setSuggestions([]);
@@ -183,6 +207,7 @@ export default function SearchBox({ onSearch, initial = "", big = false, autoFoc
                   aria-selected={isSelected}
                   onClick={() => handleSelect(item)}
                   onMouseEnter={() => setSelectedIndex(idx)}
+                  {...prefetchProps(item)}
                   className={`flex cursor-pointer items-center justify-between rounded-xl px-4 py-2.5 transition-colors ${
                     isSelected ? "bg-brand-50 text-brand-700 font-bold" : "text-ink hover:bg-paper"
                   } ${big ? "text-lg" : "text-base"}`}

@@ -15,25 +15,67 @@ export function rememberLookup(word: string, result: LookupResult): void {
 // 낱말 조회. 프런트는 항상 우리 Function(/api/lookup)만 부른다 — krdict 인증키는 서버 전용(계획서 §2.2).
 // defer=1: 뜻을 먼저 받고, 사진이 비어 있으면(imagePending) fetchPendingImages로 뒤이어 받는다(docs/perf-plan.md §2.2).
 // M0: Functions 미구현 상태에서 vite 단독 실행 시 404가 나므로 not_ready 로 부드럽게 처리.
-export async function lookupWord(word: string, refresh = false): Promise<LookupResult> {
-  const w = word.trim();
-  if (!w) return { status: "not_found", word: w };
+async function fetchLookup(w: string, opts: { refresh?: boolean; prefetch?: boolean } = {}): Promise<LookupResult> {
   try {
-    const res = await fetch(`/api/lookup?q=${encodeURIComponent(w)}&defer=1${refresh ? "&refresh=true" : ""}`, {
-      headers: { accept: "application/json" },
-    });
+    const params = `q=${encodeURIComponent(w)}&defer=1${opts.refresh ? "&refresh=true" : ""}${opts.prefetch ? "&prefetch=1" : ""}`;
+    const res = await fetch(`/api/lookup?${params}`, { headers: { accept: "application/json" } });
 
     if (!res.ok) {
       // 404(엔드포인트 없음) 등 → M0 스텁 취급
       if (res.status === 404) return { status: "not_ready", word: w };
       return { status: "error", word: w, message: `HTTP ${res.status}` };
     }
-    const data = (await res.json()) as LookupResult;
-    return data;
-  } catch (e) {
+    return (await res.json()) as LookupResult;
+  } catch {
     // 네트워크 실패(예: vite 단독 실행) → 화면은 placeholder
     return { status: "not_ready", word: w };
   }
+}
+
+// 미리 받기(prefetchLookup) 중인 요청 — 그 낱말을 누르면 새로 부르지 않고 이걸 기다린다.
+const inflight = new Map<string, Promise<LookupResult>>();
+// 이번 세션에 "자주 찾는 낱말" 집계에 들어간 낱말. 미리 받기·메모리 재표시로 연 낱말은 처음 열 때 한 번만 센다.
+const counted = new Set<string>();
+const MAX_PREFETCH = 3; // 마우스로 목록을 쓸고 지나갈 때 요청이 몰리지 않게
+
+export async function lookupWord(word: string, refresh = false): Promise<LookupResult> {
+  const w = word.trim();
+  if (!w) return { status: "not_found", word: w };
+  const pending = refresh ? undefined : inflight.get(w);
+  if (pending) {
+    const r = await pending;
+    noteViewed(w, r);
+    return r;
+  }
+  const r = await fetchLookup(w, { refresh });
+  if (r.status === "ok") counted.add(w); // 서버가 이미 셌다
+  return r;
+}
+
+// 낱말에 손가락·마우스가 닿는 순간 미리 받아 둔다. 누르기 전 0.1~0.3초를 앞당긴다.
+export function prefetchLookup(word: string): void {
+  const w = word.trim();
+  if (!w || lookupMemo.has(w) || inflight.has(w) || inflight.size >= MAX_PREFETCH) return;
+  const p = fetchLookup(w, { prefetch: true })
+    .then((r) => {
+      if (r.status === "ok" && !lookupMemo.has(w)) lookupMemo.set(w, r);
+      return r;
+    })
+    .finally(() => inflight.delete(w));
+  inflight.set(w, p);
+}
+
+// 미리 받아 둔 결과를 실제로 열었을 때 인기 집계에 한 번 넣는다.
+export function noteViewed(word: string, result: LookupResult): void {
+  const w = word.trim();
+  if (result.status !== "ok" || counted.has(w)) return;
+  counted.add(w);
+  fetch("/api/popular", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ word: w }),
+    keepalive: true,
+  }).catch(() => {});
 }
 
 // /api/lookup?defer=1 이 비워 둔 사진 채우기. homographImages는 동음이의어가 있을 때만 배열.

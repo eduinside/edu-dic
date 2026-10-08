@@ -39,11 +39,25 @@ export default function ResultCard({
 
 
   if (loading) {
+    // 결과 카드와 같은 틀의 자리표시 — 화면이 덜 출렁이고 곧 뜬다는 느낌을 준다.
+    const bar = "rounded-full bg-paper animate-pulse";
     return (
-      <div className="flex flex-col items-center justify-center gap-3 py-20 text-ink-faint">
-        <Loader2 className="size-8 animate-spin" aria-hidden />
-        <p className="text-lg">낱말을 찾고 있어요…</p>
-        {longLoading ? <p className="text-sm">처음 찾는 낱말은 조금 더 걸릴 수 있어요.</p> : null}
+      <div className="rounded-3xl border border-line bg-white p-8 sm:p-10" role="status" aria-live="polite">
+        <div className="grid gap-8 sm:grid-cols-[1fr_auto]">
+          <div className="min-w-0">
+            <div className={`h-12 w-40 ${bar}`} />
+            <div className={`mt-3 h-5 w-28 ${bar}`} />
+            <div className={`mt-10 h-6 w-full max-w-md ${bar}`} />
+            <div className={`mt-3 h-6 w-3/4 max-w-sm ${bar}`} />
+            <div className="mt-6 h-20 w-full max-w-md rounded-2xl bg-paper animate-pulse" />
+            <p className="mt-6 text-sm text-ink-faint">
+              낱말을 찾고 있어요…{longLoading ? " 처음 찾는 낱말은 조금 더 걸릴 수 있어요." : ""}
+            </p>
+          </div>
+          <div
+            className={`w-full aspect-square rounded-3xl bg-paper animate-pulse ${big ? "sm:w-96 sm:h-96 lg:w-[30rem] lg:h-[30rem]" : "sm:w-72 sm:h-72 md:w-80 md:h-80 lg:w-[22rem] lg:h-[22rem]"}`}
+          />
+        </div>
       </div>
     );
   }
@@ -194,15 +208,18 @@ function HighlightWord({ text, word }: { text: string; word: string }) {
   const cleanWord = word.replace(/[0-9]/g, "").trim();
   if (!cleanWord || !text) return <span>{text}</span>;
 
-  // 정확한 단어(cleanWord)만 분리하여 하이라이트 적용 (뒤따르는 조사는 제외)
-  const regex = new RegExp(`(${cleanWord})`, "g");
+  // 정확한 단어(cleanWord)만 분리하여 하이라이트 적용 (뒤따르는 조사는 제외).
+  // 용언은 예문에서 활용형으로 나오므로(먹다 → 먹었다) 어간만 찾는다. 불규칙 활용(가다 → 갔다)은 못 잡는다.
+  const target = cleanWord.length >= 2 && cleanWord.endsWith("다") ? cleanWord.slice(0, -1) : cleanWord;
+  const regex = new RegExp(`(${target.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")})`, "g");
   const parts = text.split(regex);
 
   return (
     <span>
       {parts.map((part, i) =>
-        part === cleanWord ? (
-          <mark key={i} className="rounded-md bg-amber-100/90 text-amber-950 font-bold px-1.5 py-0.5 shadow-xs">
+        part === target ? (
+          // 좌우 padding을 음수 margin으로 상쇄 — 예전 px-1.5는 "용기 가"처럼 조사 앞을 띄어 쓴 것처럼 보였다.
+          <mark key={i} className="-mx-0.5 rounded-sm bg-amber-100/90 px-0.5 py-0.5 font-bold text-amber-950">
             {part}
           </mark>
         ) : (
@@ -282,7 +299,7 @@ function WordHeader({
           <h1 className={`font-extrabold tracking-tight text-ink ${big ? "text-6xl sm:text-7xl lg:text-8xl" : "text-4xl sm:text-5xl"}`}>
             {word}
           </h1>
-          {audio ? <AudioButton audio={audio} big={big} /> : null}
+          {audio || showFavorite ? <AudioButton audio={audio} word={word} big={big} /> : null}
         </div>
         <div className="mt-2 flex flex-wrap items-center gap-2 text-ink-faint">
           {reading ? <span className="text-lg">[{reading}]</span> : null}
@@ -304,10 +321,29 @@ function WordHeader({
   );
 }
 
-function AudioButton({ audio, big }: { audio: DictAudio; big: boolean }) {
+// 브라우저 TTS — 국어원 발음 파일이 없거나(백과사전 낱말 등) 재생에 실패할 때 쓴다.
+function speakKorean(word: string): boolean {
+  if (typeof window === "undefined" || !("speechSynthesis" in window)) return false;
+  const u = new SpeechSynthesisUtterance(word);
+  u.lang = "ko-KR";
+  const ko = window.speechSynthesis.getVoices().find((v) => v.lang.toLowerCase().startsWith("ko"));
+  if (ko) u.voice = ko;
+  u.rate = 0.9;
+  window.speechSynthesis.cancel();
+  window.speechSynthesis.speak(u);
+  return true;
+}
+
+function AudioButton({ audio, word, big }: { audio?: DictAudio | null; word: string; big: boolean }) {
+  if (!audio && (typeof window === "undefined" || !("speechSynthesis" in window))) return null;
   const play = () => {
+    if (!audio) {
+      speakKorean(word);
+      return;
+    }
     new Audio(audio.url).play().catch(() => {
-      /* 자동재생 차단 등은 조용히 무시 — 버튼을 다시 누르면 됨 */
+      // 자동재생 차단·파일 오류 — 브라우저 TTS로 대신 읽는다
+      speakKorean(word);
     });
   };
   return (
@@ -315,7 +351,7 @@ function AudioButton({ audio, big }: { audio: DictAudio; big: boolean }) {
       type="button"
       onClick={play}
       aria-label="소리로 듣기"
-      title={audio.attribution}
+      title={audio ? audio.attribution : "기기 음성으로 읽기(국어원 발음 파일 없음)"}
       className={`grid shrink-0 place-items-center rounded-full bg-brand-50 text-brand-600 hover:bg-brand-100 active:bg-brand-200 transition-colors ${
         big ? "size-12" : "size-10"
       }`}

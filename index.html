@@ -27,13 +27,24 @@
     <meta name="twitter:title" content="어린이 쉬운 사전" />
     <meta name="twitter:description" content="어려운 낱말을 입력하면 쉬운 뜻풀이와 그림을 큰 화면으로" />
     <meta name="twitter:image" content="https://dic.dgedu.link/og-image.png" />
-    <!-- Google tag (gtag.js) — GA4 -->
-    <script async src="https://www.googletagmanager.com/gtag/js?id=G-6F79D4PWC0"></script>
+    <!-- Google tag (gtag.js) — GA4. 명령은 바로 대기열(dataLayer)에 넣고, 스크립트(약 180KB)는 화면이 다 뜬 뒤
+         한가할 때 받는다. 늦게 받아도 쌓인 명령을 그대로 처리한다. 처음 연 주소를 page_location으로 고정해
+         GA가 뜨기 전에 다른 낱말로 넘어가도 첫 방문 주소가 바뀌지 않게 한다(docs/perf-plan.md §4). -->
     <script>
       window.dataLayer = window.dataLayer || [];
       function gtag(){dataLayer.push(arguments);}
       gtag('js', new Date());
-      gtag('config', 'G-6F79D4PWC0');
+      gtag('config', 'G-6F79D4PWC0', { page_location: location.href });
+      window.addEventListener('load', function () {
+        var load = function () {
+          var s = document.createElement('script');
+          s.async = true;
+          s.src = 'https://www.googletagmanager.com/gtag/js?id=G-6F79D4PWC0';
+          document.head.appendChild(s);
+        };
+        if ('requestIdleCallback' in window) requestIdleCallback(load, { timeout: 3000 });
+        else setTimeout(load, 1500);
+      });
     </script>
   </head>
   <body>

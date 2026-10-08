@@ -1,4 +1,5 @@
 import { ChevronRight } from "lucide-react";
+import { prefetchProps } from "../lib/prefetch.ts";
 
 interface Props {
   title: string;
@@ -44,6 +45,7 @@ export default function WordChips({ title, emoji, words, onPick, emptyText, onCl
             <button
               key={w}
               onClick={() => onPick(w)}
+              {...prefetchProps(w)}
               className="flex w-full items-center justify-between px-4 py-3 text-left text-base font-semibold text-ink hover:bg-paper transition-colors"
             >
               {w}
@@ -57,6 +59,7 @@ export default function WordChips({ title, emoji, words, onPick, emptyText, onCl
             <button
               key={w}
               onClick={() => onPick(w)}
+              {...prefetchProps(w)}
               className="word-chip rounded-full border border-line bg-white px-4 py-2 text-base font-semibold text-ink"
             >
               {w}

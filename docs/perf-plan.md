@@ -83,3 +83,8 @@ AI(Timely, 한국 PC 기준, 쉬운 말 JSON 1건):
 | GA 지연 로드 | 명령은 바로 `dataLayer`에, 스크립트는 `load` 뒤 `requestIdleCallback`(최대 3초)로. `page_location` 고정. 첫 1~2초 안에 떠나는 방문은 집계에서 빠질 수 있음 |
 | 기다리는 화면 | 결과 카드 모양 자리표시(체감) |
 | 글꼴 | 기기 기본 글꼴만(맑은 고딕·애플 SD 산돌고딕 Neo·system-ui). 글꼴 파일 내려받기 없음(전에도 없었음) |
+
+## 5. 실행 위치: Smart Placement → 서울 리전 힌트 (2026-10-09)
+
+Git 연동 배포 뒤 15분 동안 가벼운 요청을 계속 보냈지만 `cf-placement`는 `local-DUB/NRT/MIA`에 머물렀다(트래픽이 적어 Smart Placement 분석이 시작되지 않는 것으로 보임). 엣지도 요청마다 더블린·도쿄·마이애미로 바뀌었다.
+→ `placement: { region: "aws:ap-northeast-2" }`(AWS 서울 리전과 지연이 가장 짧은 데이터센터에서 실행). 리전 힌트는 트래픽 분석 없이 바로 적용된다. Pages Functions 지원은 문서에 명시돼 있지 않아 배포 후 `cf-placement` 헤더로 확인한다.

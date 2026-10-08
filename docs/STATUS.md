@@ -123,3 +123,11 @@ PLAN.md의 M3(초성 검색 및 실시간 자동완성, 접근성·에러 UX 다
 - 자동완성: 기기 안 낱말로 즉시 표시 + 서버 결과 합치기(순위 규칙 `rankSuggestions` 서버·브라우저 공용).
 - 낱말 미리 받기(마우스 머묾·누름) — 인기 집계는 실제로 열 때만(`POST /api/popular`).
 - `_headers`로 `/assets/*` 1년 보관, 헤더 로고 49KB → 3.5KB, GA 지연 로드, 결과 카드 자리표시, 기기 기본 글꼴.
+
+## 2026-10-09 — GitHub 공개 저장소 + Pages Git 연동
+
+- 공개 저장소 https://github.com/eduinside/edu-dic (MIT, 사전 자료는 각 출처 조건 — README 라이선스 절).
+- 기존 Pages 프로젝트 `edu-dic`에 Git 연결 → **main 푸시 = 운영(dic.dgedu.link) 배포**. 운영 시크릿은 기존 값 그대로.
+- 데스크탑 설치 파일 GitHub Release `desktop-v0.3.0`(R2 배포본과 SHA-256 동일).
+- 공개 전 점검: 전체 기록에서 실제 키 값 0건, `updater.key`(업데이트 서명 개인키) 커밋 이력 없음.
+- 배포 직후 실측: 엣지가 `colo=DFW`(댈러스)로 바뀌었고 `cf-placement: local-DFW` — Smart Placement 분석 대기. 처음 찾는 낱말 5~6초, 캐시된 낱말 0.8초.

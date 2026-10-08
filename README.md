@@ -59,7 +59,7 @@ npm run dev
 # Pages Functions 포함 로컬 개발 (Wrangler)
 npm run pages:dev
 
-# 배포: main에 푸시하면 Cloudflare Pages(edu-dic-web)가 GitHub에서 받아 빌드·배포
+# 배포: main에 푸시하면 Cloudflare Pages(edu-dic)가 GitHub에서 받아 빌드해 운영에 바로 배포
 # 수동 배포가 필요할 때만
 npm run deploy
 ```

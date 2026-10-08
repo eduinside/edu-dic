@@ -113,3 +113,15 @@ edu-dic/
 │   └── src-tauri/        # Rust 백엔드, 전역 단축키(Ctrl+Alt+D), 트레이, 업데이터
 └── docs/                 # PLAN.md, STATUS.md
 ```
+
+---
+
+## 📄 라이선스
+
+- **소스 코드**: [MIT](LICENSE)
+- **화면에 보이는 사전 자료는 MIT가 아니며 각 출처의 이용 조건을 따릅니다.**
+  - 뜻풀이·삽화: 국립국어원 한국어기초사전 (CC BY-SA 2.0 KR)
+  - 발음 소리: 국립국어원 한국어기초사전 (CC BY-NC-ND 2.0 KR — 비상업적 이용, 변경 금지)
+  - 대체 텍스트·이미지: 한국민족문화대백과사전 (공공누리 유형별 조건)
+  - 웹 사진: 네이버 이미지 검색 결과(원저작자 권리)
+- 데스크탑 설치 파일은 [GitHub Releases](https://github.com/eduinside/edu-dic/releases)에서도 받을 수 있습니다.

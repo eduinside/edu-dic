@@ -15,7 +15,9 @@ export const onRequest: PagesFunction = async ({ request, next }) => {
   }
 
   const url = new URL(request.url);
-  if (url.hostname.endsWith(".pages.dev")) {
+  // 프로젝트 기본 주소(<project>.pages.dev)만 정본으로 보낸다. 미리보기 배포(<hash|branch>.<project>.pages.dev)는
+  // 배포 검증용이라 그대로 둔다 — 같이 보내면 미리보기에서 운영 API를 부르게 된다.
+  if (url.hostname.endsWith(".pages.dev") && url.hostname.split(".").length === 3) {
     url.hostname = "dic.dgedu.link";
     url.port = "";
     url.protocol = "https:";

@@ -90,7 +90,7 @@ npx tauri build
 | `KRDICT_API_KEY` | 필수 | 국립국어원 한국어기초사전 오픈 API 인증키 |
 | `ENCYKOREA_API_KEY` | 선택 | 한국민족문화대백과사전 오픈 API 키 |
 | `X-NCP-APIGW-API-KEY-ID` / `X-NCP-APIGW-API-KEY` | 선택 | 네이버 검색(웹문서 어휘 수집 및 이미지 폴백) NCP API 키 |
-| `TIMELY_API_KEY` | 선택 | Timely AI 게이트웨이 키 (쉬운말 변환, 오타 추측, 관련어 생성) |
+| `TIMELY_API_KEY` | 선택 | Timely AI 게이트웨이 키 — 기본 `openai/gpt-5.6-luna`(쉬운말 변환, 오타 추측, 관련어·주제 낱말), 사진 고르기만 `google/gemini-2.5-flash-lite` |
 | `GEMINI_API_KEY` | 선택 | Google Gemini API 직접 폴백 키 (`gemini-flash-lite-latest`) |
 | `DGEDU_LINK_API_KEY` / `EDULINK_API_KEY` | 선택 | `dgedu.link` 단축 URL 생성 API 키 (공유용) |
 
@@ -105,7 +105,7 @@ edu-dic/
 │   ├── lib/              # api.ts, storage.ts, words.ts 등
 │   └── App.tsx           # 메인 라우팅, 동형이의어 해시, 공유 링크 파서
 ├── functions/            # Cloudflare Pages Functions (API 백엔드)
-│   ├── api/              # lookup, suggest, related, simplify, share-topic, topic-words 등
+│   ├── api/              # lookup, image, suggest, related, simplify, share-topic, topic-words 등
 │   ├── lib/              # krdict, encykorea, naver, ai, choseong, dictionary 등
 │   └── _middleware.ts    # 전역 CORS 및 보안 헤더 처리
 ├── desktop/              # Tauri v2 Windows 데스크탑 앱

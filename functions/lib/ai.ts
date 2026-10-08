@@ -4,13 +4,21 @@
 import type { Env } from "../_shared.ts";
 
 const TIMELY_ENDPOINT = "https://hello.timelygpt.co.kr/api/v2/chat/bridge/openai/chat/completions";
+// byeduin 전체 Timely 기본 텍스트 모델과 같게 맞춘다(_ai.js DEFAULT_TIMELY_MODEL, 2026-10-06 운영자 결정).
+const TIMELY_MODEL = "openai/gpt-5.6-luna";
+// 사진 번호 고르기만 예외. 실측(2026-10-09, 같은 질문 2회씩 6낱말): luna는 3낱말에서 답이 흔들리거나
+// 금지 규칙을 어겼다(무지개 0↔1, 행복 0↔3, 우정 → 인물 사진). flash-lite는 6/6 일관되고 더 빨랐다(약 0.9초 대 1.2초).
+export const IMAGE_JUDGE_MODEL = "google/gemini-2.5-flash-lite";
+const GEMINI_MODEL = "gemini-flash-lite-latest";
+const DEFAULT_TIMEOUT_MS = 10000;
 
-async function callTimely(body: unknown, timelyKey: string): Promise<Response> {
+async function callTimely(body: unknown, timelyKey: string, timeoutMs: number): Promise<Response> {
   const doFetch = () =>
     fetch(TIMELY_ENDPOINT, {
       method: "POST",
       headers: { "content-type": "application/json", authorization: `Bearer ${timelyKey}` },
       body: JSON.stringify(body),
+      signal: AbortSignal.timeout(timeoutMs),
     });
 
   let res = await doFetch();
@@ -19,6 +27,7 @@ async function callTimely(body: unknown, timelyKey: string): Promise<Response> {
     await new Promise((r) => setTimeout(r, 400));
     res = await doFetch();
   }
+  if (res.status === 402) console.error("[ai] Timely 402(크레딧 소진) — 충전 필요. Gemini로 폴백.");
   return res;
 }
 
@@ -26,28 +35,33 @@ interface GenerateOpts {
   systemPrompt: string;
   userMessage: string;
   temperature?: number;
+  json?: boolean; // JSON 객체만 받기(Timely response_format / Gemini responseMimeType)
+  timeoutMs?: number;
+  model?: string; // Timely 모델 오버라이드(기본 TIMELY_MODEL). 직접 Gemini 폴백은 항상 GEMINI_MODEL.
 }
 
 // AI 응답 텍스트를 반환. 두 게이트웨이 모두 실패하거나 키가 없으면 null(호출부는 항상 이 실패를
 // "AI 기능 생략"으로 조용히 처리해야 한다 — 이 사전 앱의 핵심 경로는 krdict만으로 완결되어야 함).
 export async function generateText(env: Env, opts: GenerateOpts): Promise<string | null> {
-  const { systemPrompt, userMessage, temperature = 0.3 } = opts;
+  const { systemPrompt, userMessage, temperature = 0.3, json = false, timeoutMs = DEFAULT_TIMEOUT_MS, model = TIMELY_MODEL } = opts;
   const timelyKey = env.TIMELY_API_KEY;
   const geminiKey = env.GEMINI_API_KEY;
 
   if (timelyKey) {
     try {
-      const res = await callTimely(
-        {
-          model: "google/gemini-2.5-flash-lite",
-          messages: [
-            { role: "system", content: systemPrompt },
-            { role: "user", content: userMessage },
-          ],
-          temperature,
-        },
-        timelyKey,
-      );
+      const body: Record<string, unknown> = {
+        model,
+        messages: [
+          { role: "system", content: systemPrompt },
+          { role: "user", content: userMessage },
+        ],
+        temperature,
+      };
+      // 실측(2026-10-09, luna): 기본값이면 짧은 답에도 추론 토큰 30~45개를 쓰며 2~3초, "none"이면 0개·약 1.5초.
+      // 이 앱의 AI 작업(쉬운 말·관련어·오타 추측)은 추론이 필요 없는 짧은 변환이다. OpenAI 계열 모델에만 보낸다.
+      if (model.startsWith("openai/")) body.reasoning_effort = "none";
+      if (json) body.response_format = { type: "json_object" };
+      const res = await callTimely(body, timelyKey, timeoutMs);
       if (res.ok) {
         const data = (await res.json()) as { choices?: { message?: { content?: string } }[] };
         const text = data?.choices?.[0]?.message?.content;
@@ -64,23 +78,25 @@ export async function generateText(env: Env, opts: GenerateOpts): Promise<string
   if (geminiKey) {
     try {
       const res = await fetch(
-        `https://generativelanguage.googleapis.com/v1beta/models/gemini-flash-lite-latest:generateContent?key=${geminiKey}`,
+        `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent?key=${geminiKey}`,
         {
           method: "POST",
           headers: { "content-type": "application/json" },
           body: JSON.stringify({
             system_instruction: { parts: { text: systemPrompt } },
             contents: [{ role: "user", parts: [{ text: userMessage }] }],
-            generationConfig: { temperature },
+            generationConfig: json ? { temperature, responseMimeType: "application/json" } : { temperature },
           }),
+          signal: AbortSignal.timeout(timeoutMs),
         },
       );
-
 
       if (res.ok) {
         const data = (await res.json()) as { candidates?: { content?: { parts?: { text?: string }[] } }[] };
         const text = data?.candidates?.[0]?.content?.parts?.[0]?.text;
         if (text) return text.trim();
+      } else {
+        console.error("[ai] Gemini HTTP", res.status);
       }
     } catch {
       /* 조용히 실패 — null 반환 */
@@ -115,7 +131,7 @@ export async function predictWordCandidate(env: Env, input: string): Promise<str
 
 /**
  * 네이버 이미지 검색 후보 제목들을 사전 표제어 및 뜻풀이와 대조하여
- * 가장 적절한 번호(1~N)를 선택합니다. 모두 부적합하면 0을 반환합니다. (타임아웃 1.2초)
+ * 가장 적절한 번호(1~N)를 선택합니다. 모두 부적합하면 0을 반환합니다. (타임아웃 3초)
  */
 export async function selectBestImageIndex(
   env: Env,
@@ -133,13 +149,17 @@ export async function selectBestImageIndex(
     .map((t, i) => `${i + 1}: ${t}`)
     .join("\n")}\n\n가장 적합한 번호(숫자 1개):`;
 
+  // luna는 짧은 답도 1.2초 안팎이라(실측) 예전 1.2초 한도면 거의 항상 시간 초과였다. 사진 채우기는 이제
+  // 첫 응답 뒤(/api/image)에서 돌아서 3초로 늘려도 화면이 기다리지 않는다.
   const aiPromise = generateText(env, {
     systemPrompt,
     userMessage,
     temperature: 0.1,
+    timeoutMs: 3000,
+    model: IMAGE_JUDGE_MODEL,
   });
 
-  const timeoutPromise = new Promise<null>((resolve) => setTimeout(() => resolve(null), 1200));
+  const timeoutPromise = new Promise<null>((resolve) => setTimeout(() => resolve(null), 3000));
 
   try {
     const raw = await Promise.race([aiPromise, timeoutPromise]);

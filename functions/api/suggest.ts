@@ -1,5 +1,5 @@
 import { jsonResponse, type Env } from "../_shared.ts";
-import { getCachedWords, getPopular } from "../lib/store.ts";
+import { getWordPool } from "../lib/store.ts";
 import { isBlocked } from "../lib/blocklist.ts";
 import { extractChoseong, isChoseongOnly, matchesChoseongOrPrefix } from "../lib/choseong.ts";
 import { WORD_SETS } from "../../app/lib/words.ts";
@@ -21,11 +21,8 @@ export const onRequestGet: PagesFunction<Env> = async (context) => {
     }
   }
 
-  // 2. D1 캐시 및 인기 낱말 수집 (풀 1000개로 확대)
-  const [cachedWords, popularWords] = await Promise.all([
-    getCachedWords(context.env, 1000).catch(() => []),
-    getPopular(context.env, 50).catch(() => []),
-  ]);
+  // 2. D1 캐시 및 인기 낱말 수집 (풀 1000개, isolate 메모리에 5분 보관)
+  const { cached: cachedWords, popular: popularWords } = await getWordPool(context.env);
 
   for (const w of cachedWords) curatedSet.add(w);
   for (const w of popularWords) curatedSet.add(w);

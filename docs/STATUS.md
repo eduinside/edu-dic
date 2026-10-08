@@ -94,3 +94,19 @@ PLAN.md의 M3(초성 검색 및 실시간 자동완성, 접근성·에러 UX 다
    - Minisign 암호화 디지털 서명 완료 및 Cloudflare R2(`edu-dic-downloads`) 배포 완료
 
 
+
+## 2026-10-09 — 첫 조회 속도 개선 + AI 모델 luna 교체 (`docs/perf-plan.md`)
+
+실측 원인: 한국 사용자 요청이 **파리(CDG) 엣지**에서 실행(`loc=KR colo=CDG`)되어 krdict·네이버·Timely를 매번 파리↔한국 왕복, 사진 보완(네이버+AI 심사)이 첫 응답을 붙잡음, `/api/related`의 krdict 검증 직렬(운영 25.9초).
+
+- **실행 위치**: `wrangler.jsonc` `placement: smart` + `public/_routes.json`(Functions는 `/api/*`·`/download/*`만, 정적 파일은 Functions 우회). pages.dev 리다이렉트는 HTML은 `index.html` 스크립트, API는 미들웨어.
+- **뜻 먼저, 사진은 뒤이어**: `/api/lookup?defer=1` → `imagePending` 표시, 새 `/api/image`가 채움. 웹은 "사진 찾는 중…" 자리표시. `defer` 없는 데스크탑 앱은 기존 동작 유지.
+- **병렬화**: related·topic-words 후보 검증, 미수록어 오타 변환+AI 추측 동시 시작. related는 캐시가 없어도 krdict 재조회 안 함.
+- **캐시 경합 수정**: simplify·related·image·image-action이 항목 전체를 덮어쓰던 것을 `patchCachedEntry`(D1 `json_set`/`json_remove`) 필드 단위 갱신으로.
+- **타임아웃**: 모든 외부 fetch에 `AbortSignal.timeout`(krdict 5초·래퍼 3초·encykorea 3초·네이버 2.5~3초·AI 10초, 주제 낱말 15초).
+- **자동완성**: 낱말 풀을 isolate 메모리에 5분 캐시(글자마다 D1 두 번 읽던 것 제거). 웹은 세션 안에서 본 낱말을 메모리에서 바로 표시.
+- **AI**: Timely 기본 `openai/gpt-5.6-luna` + `reasoning_effort: "none"`(추론 토큰 0, 약 1.5초), `json` 모드·호출별 타임아웃. 사진 번호 고르기만 `google/gemini-2.5-flash-lite` 유지(luna가 6낱말 중 3낱말에서 답이 흔들림).
+- 버그: `image-action` 오류 응답이 200으로 나가던 것, 기존 타입 오류 4건 수정(`tsc --noEmit` 통과).
+
+로컬(`wrangler pages dev`, 한국 PC) 실측: 처음 찾는 낱말 뜻 0.4~0.7초 → 사진 1.3~1.9초 뒤 표시, 관련어 약 2초, 쉬운 말 1.7~2초, 재방문 0.15초. 동시 저장(사진·관련어·쉬운 말 h0/h1) 모두 보존 확인.
+배포 후 확인할 것: 응답 헤더 `cf-placement`(remote-ICN 등), 운영 첫 조회 시간, encykorea(`:8080` 포트) 호출이 엣지에서 정상인지 로그.

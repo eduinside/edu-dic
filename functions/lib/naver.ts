@@ -42,6 +42,7 @@ export async function searchNaverImage(
       "X-NCP-APIGW-API-KEY-ID": clientId,
       "X-NCP-APIGW-API-KEY": clientSecret,
     },
+    signal: AbortSignal.timeout(3000),
   });
   if (!res.ok) return null;
 
@@ -117,6 +118,7 @@ export async function searchNaverErrata(clientId: string, clientSecret: string, 
       "X-NCP-APIGW-API-KEY-ID": clientId,
       "X-NCP-APIGW-API-KEY": clientSecret,
     },
+    signal: AbortSignal.timeout(2500),
   });
   if (!res.ok) return null;
 
@@ -141,6 +143,7 @@ export async function searchNaverWeb(
         "X-NCP-APIGW-API-KEY-ID": clientId,
         "X-NCP-APIGW-API-KEY": clientSecret,
       },
+      signal: AbortSignal.timeout(3000),
     });
     if (!res.ok) return [];
 

@@ -7,6 +7,12 @@
   "compatibility_flags": ["nodejs_compat"],
   "pages_build_output_dir": "./dist",
 
+  // 무료 플랜 한국 트래픽이 파리(CDG) 엣지에서 실행되는 것을 실측(2026-10-09, loc=KR colo=CDG) —
+  // krdict·네이버·Timely가 모두 한국이라 Functions를 백엔드 가까이로 옮긴다. 정적 파일은 _routes.json으로
+  // Functions를 거치지 않으므로 계속 사용자 가까운 엣지에서 나간다. 확인: 응답 헤더 cf-placement.
+  // docs/perf-plan.md §2.1
+  "placement": { "mode": "smart" },
+
   // 공유 D1 (D12) — edu-link/edu-kit와 동일 DB. 테이블만 edudic_ 접두어로 분리.
   "d1_databases": [
     {

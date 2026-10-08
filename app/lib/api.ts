@@ -1,12 +1,25 @@
-import type { DictSense, LookupResult } from "../types.ts";
+import type { DictImage, DictSense, LookupResult } from "../types.ts";
+
+// 이번 세션에서 이미 본 낱말은 서버를 다시 부르지 않고 바로 보여 준다(뒤로 가기·같은 낱말 다시 누르기).
+// App이 화면의 결과(쉬운 말·사진 교체가 반영된 것)를 rememberLookup으로 계속 덮어쓴다.
+const lookupMemo = new Map<string, LookupResult>();
+
+export function getRememberedLookup(word: string): LookupResult | undefined {
+  return lookupMemo.get(word.trim());
+}
+
+export function rememberLookup(word: string, result: LookupResult): void {
+  if (result.status === "ok") lookupMemo.set(word.trim(), result);
+}
 
 // 낱말 조회. 프런트는 항상 우리 Function(/api/lookup)만 부른다 — krdict 인증키는 서버 전용(계획서 §2.2).
+// defer=1: 뜻을 먼저 받고, 사진이 비어 있으면(imagePending) fetchPendingImages로 뒤이어 받는다(docs/perf-plan.md §2.2).
 // M0: Functions 미구현 상태에서 vite 단독 실행 시 404가 나므로 not_ready 로 부드럽게 처리.
 export async function lookupWord(word: string, refresh = false): Promise<LookupResult> {
   const w = word.trim();
   if (!w) return { status: "not_found", word: w };
   try {
-    const res = await fetch(`/api/lookup?q=${encodeURIComponent(w)}${refresh ? "&refresh=true" : ""}`, {
+    const res = await fetch(`/api/lookup?q=${encodeURIComponent(w)}&defer=1${refresh ? "&refresh=true" : ""}`, {
       headers: { accept: "application/json" },
     });
 
@@ -20,6 +33,25 @@ export async function lookupWord(word: string, refresh = false): Promise<LookupR
   } catch (e) {
     // 네트워크 실패(예: vite 단독 실행) → 화면은 placeholder
     return { status: "not_ready", word: w };
+  }
+}
+
+// /api/lookup?defer=1 이 비워 둔 사진 채우기. homographImages는 동음이의어가 있을 때만 배열.
+export async function fetchPendingImages(
+  word: string,
+): Promise<{ image: DictImage | null; homographImages: (DictImage | null)[] | null } | null> {
+  try {
+    const res = await fetch(`/api/image?q=${encodeURIComponent(word)}`, { headers: { accept: "application/json" } });
+    if (!res.ok) return null;
+    const data = (await res.json()) as {
+      status: string;
+      image?: DictImage | null;
+      homographImages?: (DictImage | null)[] | null;
+    };
+    if (data.status !== "ok") return null;
+    return { image: data.image ?? null, homographImages: data.homographImages ?? null };
+  } catch {
+    return null;
   }
 }
 

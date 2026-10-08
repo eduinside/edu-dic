@@ -25,8 +25,10 @@ const MAX_HOMOGRAPHS = 4; // 비용 상한(캐시되므로 낱말당 1회만 영
 const UA =
   "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0 Safari/537.36 edu-dic/1.0";
 
-function krFetch(url: string): Promise<Response> {
-  return fetch(url, { headers: { "user-agent": UA } });
+// 타임아웃이 없으면 krdict가 응답을 늦게 줄 때 요청 전체가 매달린다(실측 2026-10-09: 22초 뒤 502).
+// 검색·상세는 뜻풀이에 꼭 필요해 5초, 미디어 래퍼(사진·소리 주소 풀기)는 없어도 되니 3초.
+function krFetch(url: string, timeoutMs = 5000): Promise<Response> {
+  return fetch(url, { headers: { "user-agent": UA }, signal: AbortSignal.timeout(timeoutMs) });
 }
 
 interface SearchCandidate {
@@ -151,7 +153,8 @@ async function viewDetail(key: string, targetCode: string): Promise<ViewDetail |
 // searchResultView.do?file_no=… HTML 페이지에서 실제 이미지 경로를 뽑아 절대 URL로 만든다.
 // (CC BY-SA 배지 이미지 cc_by_sa.png 는 제외하고 첫 콘텐츠 이미지만 취한다.)
 async function resolveImageUrl(mediaPageUrl: string): Promise<string | null> {
-  const res = await krFetch(mediaPageUrl);
+  const res = await krFetch(mediaPageUrl, 3000).catch(() => null);
+  if (!res) return null;
   if (!res.ok) return null;
   const html = await res.text();
   const srcs = [...html.matchAll(/<img[^>]+src="([^"]+)"/gi)].map((m) => m[1]);
@@ -162,7 +165,8 @@ async function resolveImageUrl(mediaPageUrl: string): Promise<string | null> {
 
 // 발음 래퍼 페이지에서 실제 mp3 경로를 뽑는다. <script>fnCmdPlaywer('audio', '/convert/.../SND..._.mp3', ...)</script> 패턴.
 async function resolveAudioUrl(audioPageUrl: string): Promise<string | null> {
-  const res = await krFetch(audioPageUrl);
+  const res = await krFetch(audioPageUrl, 3000).catch(() => null);
+  if (!res) return null;
   if (!res.ok) return null;
   const html = await res.text();
   const m = /fnCmdPlaywer\(\s*'audio'\s*,\s*'([^']+\.mp3)'/i.exec(html);

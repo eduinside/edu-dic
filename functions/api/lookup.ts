@@ -5,15 +5,17 @@ import { isChoseongOnly, matchesChoseongOrPrefix } from "../lib/choseong.ts";
 import { KrdictError, searchWord } from "../lib/krdict.ts";
 import { searchNaverErrata } from "../lib/naver.ts";
 import { predictWordCandidate } from "../lib/ai.ts";
-import { bumpPopular, getCachedWords } from "../lib/store.ts";
+import { bumpPopular, getWordPool } from "../lib/store.ts";
 
 // 사전에 없는 낱말이거나 미등록 초성일 때:
 // 1) 네이버 오타 변환 API (NCP API Hub)
 // 2) AI 추측 추천 (Timely / Gemini)
 // 3) 국어원 표제어 유효성 검증
+// 1)과 2)는 동시에 시작한다 — 오타 변환이 실패한 뒤에야 AI를 부르면 그만큼 한 번 더 기다리게 된다.
 async function suggestCorrection(env: Env, word: string): Promise<string | undefined> {
   const naverId = env["X-NCP-APIGW-API-KEY-ID"];
   const naverKey = env["X-NCP-APIGW-API-KEY"];
+  const aiPromise = predictWordCandidate(env, word).catch(() => null);
 
   // 1. 네이버 오타 변환 시도
   if (naverId && naverKey) {
@@ -31,7 +33,7 @@ async function suggestCorrection(env: Env, word: string): Promise<string | undef
   }
 
   // 2. AI 낱말 추측 시도 (초성 미등록어 'ㄱㄱㅁ' 또는 오타 '고굼마' 등)
-  const aiCandidate = await predictWordCandidate(env, word).catch(() => null);
+  const aiCandidate = await aiPromise;
   if (aiCandidate && aiCandidate !== word && !isBlocked(aiCandidate)) {
     if (env.KRDICT_API_KEY) {
       try {
@@ -57,7 +59,7 @@ export const onRequestGet: PagesFunction<Env> = async ({ request, env, waitUntil
 
   // 0) 검색어가 초성만으로 구성된 경우 (예: "ㄷㄱ", "ㄱㄱㅁ")
   if (isChoseongOnly(q)) {
-    const cachedWords = await getCachedWords(env);
+    const { cached: cachedWords } = await getWordPool(env);
     const matched = cachedWords.find((w) => matchesChoseongOrPrefix(w, q));
     if (matched) {
       q = matched;
@@ -74,8 +76,11 @@ export const onRequestGet: PagesFunction<Env> = async ({ request, env, waitUntil
 
   const refresh = url.searchParams.get("refresh") === "true" || url.searchParams.get("refresh") === "1";
 
+  // defer=1: 웹 — 뜻 먼저 돌려주고 사진은 /api/image로 따로 채운다. 없으면(데스크탑 앱) 사진까지 채워서 응답.
+  const deferImages = url.searchParams.get("defer") === "1";
+
   try {
-    const entry = await getOrFetchEntry(env, q, waitUntil, refresh);
+    const entry = await getOrFetchEntry(env, q, { waitUntil, refresh, deferImages });
 
     if (!entry) {
       const suggestion = await suggestCorrection(env, q).catch(() => undefined);

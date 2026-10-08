@@ -1,5 +1,5 @@
 // GET & HEAD /api/download/desktop — 최신 데스크탑 설치 프로그램 다운로드
-import type { Env } from "../../_shared.ts";
+import type { Env } from "../_shared.ts";
 
 const OBJECT_KEY = "edu-dic-desktop-setup.exe";
 

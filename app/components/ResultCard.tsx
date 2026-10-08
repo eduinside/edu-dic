@@ -81,7 +81,7 @@ export default function ResultCard({
   const homographs: DictHomograph[] =
     entry.homographs && entry.homographs.length > 1
       ? entry.homographs
-      : [{ pos: entry.pos, level: entry.level, senses: entry.senses, image: entry.image, audio: entry.audio, easySenses: entry.easySenses }];
+      : [{ pos: entry.pos, level: entry.level, senses: entry.senses, image: entry.image, audio: entry.audio, easySenses: entry.easySenses, imagePending: entry.imagePending }];
   const safeIndex = homoIndex < homographs.length ? homoIndex : 0;
   const active = homographs[safeIndex] ?? homographs[0];
 
@@ -178,6 +178,7 @@ export default function ResultCard({
 
         <ResultImage
           image={active.image}
+          pending={!!active.imagePending}
           word={entry.word}
           big={big}
           onImageAction={onImageAction}
@@ -328,11 +329,13 @@ function AudioButton({ audio, big }: { audio: DictAudio; big: boolean }) {
 // object-contain으로 원본 비율을 그대로 두어(크롭 없음) 삽화의 일부가 잘려 나가지 않게 한다.
 function ResultImage({
   image,
+  pending,
   word,
   big,
   onImageAction,
 }: {
   image?: DictImage | null;
+  pending?: boolean; // 뜻이 먼저 뜨고 사진은 아직 찾는 중(/api/image)
   word: string;
   big: boolean;
   onImageAction?: (action: "next" | "hide", currentUrl: string) => Promise<void>;
@@ -343,6 +346,17 @@ function ResultImage({
     ? "sm:w-96 sm:h-96 lg:w-[30rem] lg:h-[30rem]"
     : "sm:w-72 sm:h-72 md:w-80 md:h-80 lg:w-[22rem] lg:h-[22rem]";
 
+  if (!image && pending) {
+    return (
+      <div
+        className={`flex w-full aspect-square shrink-0 flex-col items-center justify-center gap-2 self-start rounded-3xl bg-paper text-ink-faint animate-pulse ${sizeAtSm}`}
+        role="status"
+      >
+        <Loader2 className="size-7 animate-spin" aria-hidden />
+        <span className="text-sm">사진 찾는 중…</span>
+      </div>
+    );
+  }
   if (!image) return null;
 
   const handleAction = async (action: "next" | "hide") => {

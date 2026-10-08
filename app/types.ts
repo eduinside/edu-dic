@@ -25,6 +25,7 @@ export interface DictHomograph {
   image?: DictImage | null;
   audio?: DictAudio | null;
   easySenses?: DictSense[] | null; // 이 동음이의어 전용 "쉬운 말" 변환본(D25 — 탭별로 따로 캐시).
+  imagePending?: boolean; // 사진(encykorea·네이버) 보완을 아직 안 함 — /api/image가 채운다(docs/perf-plan.md §2.2).
 }
 
 export interface DictEntry {
@@ -38,6 +39,7 @@ export interface DictEntry {
   homographs?: DictHomograph[]; // 동음이의어가 2개 이상일 때만 채움(D22) — [0]이 위 최상위 필드와 같은 것
   easySenses?: DictSense[] | null; // AI 변환: 사전 뜻풀이를 그대로(스켈레톤) 쉬운 말로만 다시 쓴 것. 캐시됨.
   related?: string[] | null; // AI 제안 관련어 — krdict에 실제 있는 낱말만 검증 후 저장. 캐시됨.
+  imagePending?: boolean; // 대표(단일 뜻) 사진 보완 대기 — homographs가 있으면 각 항목의 imagePending을 본다.
   source: "krdict" | "encykorea"; // krdict 미수록일 때만 encykorea 텍스트로 대체(D20). 화면에 출처를 다르게 표시.
   fetchedAt: string;
 }

@@ -2,7 +2,7 @@ import { json, type Env } from "../_shared.ts";
 import { generateText } from "../lib/ai.ts";
 import { isBlocked } from "../lib/blocklist.ts";
 import { getOrFetchEntry } from "../lib/dictionary.ts";
-import { putCachedEntry } from "../lib/store.ts";
+import { patchCachedEntry } from "../lib/store.ts";
 import type { DictSense } from "../../app/types.ts";
 
 // GET /api/simplify?q=낱말&h=동음이의어_인덱스(선택, 기본 0) — 상단 "쉬운 말로" 토글용(D17-2).
@@ -21,7 +21,7 @@ export const onRequestGet: PagesFunction<Env> = async ({ request, env, waitUntil
   const h = Math.max(0, Number(url.searchParams.get("h") ?? "0") || 0);
   if (!q || isBlocked(q)) return json({ status: "not_found", word: q });
 
-  const entry = await getOrFetchEntry(env, q, waitUntil);
+  const entry = await getOrFetchEntry(env, q, { waitUntil, deferImages: true });
   if (!entry) return json({ status: "not_found", word: q });
 
   const homographs = entry.homographs && entry.homographs.length > 1 ? entry.homographs : null;
@@ -50,23 +50,25 @@ export const onRequestGet: PagesFunction<Env> = async ({ request, env, waitUntil
       "(1) 뜻풀이(def): 초등 저학년 눈높이로 쉽게 설명하되, 반드시 사전 정의처럼 간결한 명사구(체언) 형태로 끝맺을 것 (예: '아직 어린 소.', '바람을 일으키는 기계.', '책을 읽는 곳.').\n" +
       "★ 금지: '~를 말하는 거야', '~를 뜻하는 거야', '~를 말해요', '~예요', '~하는 것을 의미해' 같은 불필요한 지시형/구어체/설명형 어미는 절대 쓰지 마.\n" +
       "(2) 예문(example): 어린이가 집이나 학교에서 직접 말하거나 겪을 법한 친근하고 쉬운 1문장. 해당 낱말이 반드시 포함되어야 함.\n" +
-      "(3) 입력 항목 개수와 순서를 정확히 유지하여 반드시 다음 JSON 배열 형식으로만 출력:\n" +
-      `[{"def": "쉬운 뜻풀이", "example": "어린이 쉬운 예문"}]`,
+      "(3) 입력 항목 개수와 순서를 정확히 유지하여 반드시 다음 JSON 형식으로만 출력:\n" +
+      `{"items": [{"def": "쉬운 뜻풀이", "example": "어린이 쉬운 예문"}]}`,
     userMessage: `낱말: "${q}"\n\n항목 목록:\n${JSON.stringify(inputData, null, 2)}`,
     temperature: 0.3,
+    json: true,
   }).catch(() => null);
 
   const easySenses = raw ? parseEasySenses(raw, targetSenses) : null;
 
   if (easySenses) {
+    // 이 필드만 갱신 — 같은 때 끝난 related·image 저장을 덮어쓰지 않는다(docs/perf-plan.md §2.4).
+    const sets: [string, unknown][] = [];
     if (homographs) {
-      homographs[h] = { ...homographs[h], easySenses };
-      entry.homographs = homographs;
-      if (h === 0) entry.easySenses = easySenses; // 대표 뜻 필드도 동기화(하위 호환)
+      sets.push([`$.homographs[${h}].easySenses`, easySenses]);
+      if (h === 0) sets.push(["$.easySenses", easySenses]); // 대표 뜻 필드도 동기화(하위 호환)
     } else {
-      entry.easySenses = easySenses;
+      sets.push(["$.easySenses", easySenses]);
     }
-    waitUntil(putCachedEntry(env, q, entry).catch(() => {}));
+    waitUntil(patchCachedEntry(env, q, sets).catch(() => {}));
   }
 
   return json({ status: "ok", easySenses });
@@ -85,11 +87,13 @@ function cleanEasyDef(def: string): string {
   return text;
 }
 
-// JSON 배열 또는 텍스트 폴백으로 DictSense 배열 파싱
+// {"items": [...]} 객체(json 모드)나 배열, 실패하면 번호 텍스트 폴백으로 DictSense 배열 파싱
 function parseEasySenses(raw: string, original: DictSense[]): DictSense[] | null {
   try {
     const clean = raw.replace(/^```(json)?\s*/i, "").replace(/\s*```$/, "").trim();
-    const parsed = JSON.parse(clean) as { def?: string; example?: string }[];
+    const obj = JSON.parse(clean) as unknown;
+    const list = Array.isArray(obj) ? obj : (obj as { items?: unknown })?.items;
+    const parsed = list as { def?: string; example?: string }[];
     if (Array.isArray(parsed) && parsed.length === original.length) {
       return parsed.map((item, i) => ({
         def: cleanEasyDef(item.def ?? "") || original[i].def,

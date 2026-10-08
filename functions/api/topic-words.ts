@@ -58,6 +58,8 @@ export const onRequestGet: PagesFunction<Env> = async ({ request, env }) => {
       "너는 초등학교 국어 어휘 지도 전문가이자 교육 과정 전문가야. 주어진 주제와 참고 웹문서를 분석하여 어린이들이 배우기 좋은 생생하고 구체적인 한국어 기초 어휘를 정확한 JSON으로만 답해줘.",
     userMessage: prompt,
     temperature: 0.3,
+    json: true,
+    timeoutMs: 15000, // 낱말 12~18개 목록이라 다른 AI 호출보다 답이 길다
   }).catch(() => null);
 
   if (raw) {
@@ -83,21 +85,10 @@ export const onRequestGet: PagesFunction<Env> = async ({ request, env }) => {
   // 중복 제거
   candidateWords = [...new Set(candidateWords)].slice(0, 16);
 
-  // krdict 접지(Grounding) 검증
-  const verifiedWords: string[] = [];
-  for (const word of candidateWords) {
-    if (verifiedWords.length >= 12) break;
-    try {
-      const found = await searchWord(env.KRDICT_API_KEY, word);
-      if (found && found.word) {
-        if (!verifiedWords.includes(found.word)) {
-          verifiedWords.push(found.word);
-        }
-      }
-    } catch {
-      // 개별 단어 조회 실패 시 건너뜀
-    }
-  }
+  // krdict 접지(Grounding) 검증 — 후보를 한꺼번에 조회하고 AI가 준 순서대로 앞에서 12개
+  const krdictKey = env.KRDICT_API_KEY;
+  const checked = await Promise.all(candidateWords.map((w) => searchWord(krdictKey, w).catch(() => null)));
+  const verifiedWords = [...new Set(checked.flatMap((f) => (f?.word ? [f.word] : [])))].slice(0, 12);
 
   if (verifiedWords.length === 0) {
     return json({

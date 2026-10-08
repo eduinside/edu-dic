@@ -1,4 +1,5 @@
-// 전역 미들웨어: CORS 허용 및 *.pages.dev 리다이렉트
+// 미들웨어: CORS 허용 및 *.pages.dev 리다이렉트.
+// public/_routes.json 때문에 /api/*, /download/* 에서만 돈다(정적 파일·SPA 페이지의 pages.dev 리다이렉트는 index.html 스크립트).
 export const onRequest: PagesFunction = async ({ request, next }) => {
   // CORS Preflight 처리
   if (request.method === "OPTIONS") {

@@ -1,9 +1,8 @@
 import { json, type Env } from "../_shared.ts";
 import { generateText } from "../lib/ai.ts";
 import { isBlocked } from "../lib/blocklist.ts";
-import { getOrFetchEntry } from "../lib/dictionary.ts";
 import { searchWord } from "../lib/krdict.ts";
-import { putCachedEntry } from "../lib/store.ts";
+import { getCachedEntry, patchCachedEntry } from "../lib/store.ts";
 
 interface CommunityTopicMatch {
   title: string;
@@ -51,15 +50,15 @@ export const onRequestGet: PagesFunction<Env> = async ({ request, env, waitUntil
   const q = (url.searchParams.get("q") ?? "").trim();
   if (!q || isBlocked(q)) return json({ words: [], communityTopic: null });
 
+  // 관련어에는 표제어만 있으면 된다 — 캐시 항목은 저장된 관련어를 꺼내 보는 데만 쓰고, 없다고 krdict를
+  // 처음부터 다시 조회하지 않는다(화면은 /api/lookup 성공 뒤에만 이걸 부르므로 보통 캐시에 있다).
   const [entry, communityTopic] = await Promise.all([
-    getOrFetchEntry(env, q, waitUntil),
+    getCachedEntry(env, q).catch(() => null),
     findCommunityTopicForWord(env.DB, q),
   ]);
 
-  if (!entry) return json({ words: [], communityTopic });
-
   // 1. 이미 캐시된 AI 관련어가 있는 경우
-  if (entry.related && entry.related.length > 0) {
+  if (entry?.related && entry.related.length > 0) {
     return json({ words: entry.related, communityTopic });
   }
 
@@ -91,16 +90,10 @@ export const onRequestGet: PagesFunction<Env> = async ({ request, env, waitUntil
     .filter((w) => w !== q && w.length <= 12 && !isBlocked(w))
     .slice(0, 8);
 
-  const verified: string[] = [];
-  for (const c of candidates) {
-    if (verified.length >= 5) break;
-    try {
-      const found = await searchWord(env.KRDICT_API_KEY, c);
-      if (found) verified.push(found.word);
-    } catch {
-      /* 검증 실패 건너뜀 */
-    }
-  }
+  // 후보를 한꺼번에 검증한다(예전에는 하나씩 기다려 파리 엣지 기준 25초까지 걸렸다). 순서는 AI 순서 유지.
+  const krdictKey = env.KRDICT_API_KEY;
+  const checked = await Promise.all(candidates.map((c) => searchWord(krdictKey, c).catch(() => null)));
+  const verified = [...new Set(checked.flatMap((f) => (f ? [f.word] : [])))].slice(0, 5);
 
   // AI 검증 결과가 부족할 경우 커스텀 주제 단어로 보충
   if (verified.length < 3 && communityTopic) {
@@ -110,8 +103,7 @@ export const onRequestGet: PagesFunction<Env> = async ({ request, env, waitUntil
     }
   }
 
-  entry.related = verified;
-  waitUntil(putCachedEntry(env, q, entry).catch(() => {}));
+  if (entry) waitUntil(patchCachedEntry(env, q, [["$.related", verified]]).catch(() => {}));
 
   return json({ words: verified, communityTopic });
 };

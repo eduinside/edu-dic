@@ -36,7 +36,7 @@ export interface EncyResult {
 // 완전히 다른 낱말의 전문 정의가 뜰 위험이 크다 — krdict 동음이의어 함정보다 훨씬 넓은 함정).
 export async function searchEncykorea(key: string, word: string): Promise<EncyResult | null> {
   const url = `${BASE}/articles/search?q=${encodeURIComponent(word)}&p=1&ps=20`;
-  const res = await fetch(url, { headers: { "X-Api-Key": key, "user-agent": UA } });
+  const res = await fetch(url, { headers: { "X-Api-Key": key, "user-agent": UA }, signal: AbortSignal.timeout(3000) });
   if (!res.ok) return null;
 
   const data = (await res.json()) as { items?: EncyArticle[] };

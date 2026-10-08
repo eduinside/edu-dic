@@ -9,6 +9,10 @@
     <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
     <link rel="manifest" href="/manifest.webmanifest" />
     <meta name="theme-color" content="#1f7af0" />
+    <script>
+      // *.pages.dev 기본 주소로 들어오면 정본 도메인으로 보낸다(페이지는 Functions를 거치지 않으므로 여기서 처리, _routes.json).
+      if (location.hostname.endsWith(".pages.dev")) location.replace("https://dic.dgedu.link" + location.pathname + location.search + location.hash);
+    </script>
     <title>어린이 쉬운 사전</title>
     <meta name="description" content="어려운 낱말을 입력하면 쉬운 뜻풀이와 그림을 큰 화면으로 보여 주는 어린이 사전" />
     <meta property="og:type" content="website" />

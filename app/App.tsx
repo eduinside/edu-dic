@@ -26,16 +26,45 @@ import UsageGuide from "./components/UsageGuide.tsx";
 import {
   createTopicShareLink,
   fetchEasySenses,
+  fetchPendingImages,
   fetchPopular,
   fetchRelated,
   fetchTopicWords,
+  getRememberedLookup,
   lookupWord,
+  rememberLookup,
   requestImageAction,
 } from "./lib/api.ts";
 
 import { relatedWords, WORD_SETS, type WordSet } from "./lib/words.ts";
 import * as store from "./lib/storage.ts";
-import type { CustomWordSet, DictSense, LookupResult, ReadingLevel } from "./types.ts";
+import type { CustomWordSet, DictEntry, DictImage, DictSense, LookupResult, ReadingLevel } from "./types.ts";
+
+function hasPendingImages(entry: DictEntry): boolean {
+  return entry.homographs && entry.homographs.length > 1
+    ? entry.homographs.some((hg) => hg.imagePending)
+    : !!entry.imagePending;
+}
+
+// /api/image 결과를 화면 결과에 끼워 넣는다. imgs가 null(실패)이어도 대기 표시는 지워 "사진 찾는 중"이 남지 않게 한다.
+function applyPendingImages(
+  entry: DictEntry,
+  imgs: { image: DictImage | null; homographImages: (DictImage | null)[] | null } | null,
+): DictEntry {
+  const next: DictEntry = { ...entry };
+  delete next.imagePending;
+  if (next.homographs && next.homographs.length > 1) {
+    next.homographs = next.homographs.map((hg, i) => {
+      const { imagePending, ...rest } = hg;
+      if (!imagePending) return rest;
+      return { ...rest, image: imgs?.homographImages?.[i] ?? null };
+    });
+    next.image = next.homographs[0]?.image ?? null;
+  } else if (entry.imagePending) {
+    next.image = imgs?.image ?? null;
+  }
+  return next;
+}
 
 const LANDING_PREVIEW_MAX = 5; // 랜딩 4열 각각 최대 개수(D23)
 
@@ -160,12 +189,13 @@ export default function App() {
     const longTimer = setTimeout(() => {
       if (seq === requestSeq.current) setLongLoading(true);
     }, 1200);
-    const r = await lookupWord(q);
+    const r = getRememberedLookup(q) ?? (await lookupWord(q));
     clearTimeout(longTimer);
     if (seq !== requestSeq.current) return; // 그 사이 다른 낱말을 검색했으면 이 결과는 버린다
     setResult(r);
     setLoading(false);
     setLongLoading(false);
+    if (r.status === "ok" && hasPendingImages(r.entry)) loadPendingImages(r.entry.word, seq);
     // 답을 찾은 낱말만 "내가 찾은/자주 찾은"에 남긴다 — 오타·미수록 낱말이 기록에 끼면 안 됨.
     if (r.status === "ok") {
       if (r.entry.homographs && r.entry.homographs.length > 0) {
@@ -178,6 +208,21 @@ export default function App() {
       setMyPopular(store.getMostSearched());
     }
   }, []);
+
+  // 뜻이 먼저 뜬 뒤 비어 있던 사진(네이버·백과사전 보완)을 받아 끼워 넣는다(docs/perf-plan.md §2.2).
+  const loadPendingImages = useCallback((w: string, seq: number) => {
+    fetchPendingImages(w).then((imgs) => {
+      if (seq !== requestSeq.current) return;
+      setResult((prev) =>
+        prev?.status === "ok" && prev.entry.word === w ? { ...prev, entry: applyPendingImages(prev.entry, imgs) } : prev,
+      );
+    });
+  }, []);
+
+  // 화면 결과(쉬운 말·사진 교체가 반영된 것)를 세션 메모리에 남겨 같은 낱말을 다시 찾으면 바로 보여 준다.
+  useEffect(() => {
+    if (word && result?.status === "ok") rememberLookup(word, result);
+  }, [word, result]);
 
   const handleHomoIndexChange = useCallback((i: number) => {
     setHomoIndex(i);
@@ -222,11 +267,14 @@ export default function App() {
   const handleRefreshWord = useCallback(async () => {
     if (!word) return;
     setLoading(true);
+    const seq = ++requestSeq.current;
     const r = await lookupWord(word, true);
+    if (seq !== requestSeq.current) return;
     setResult(r);
     setLoading(false);
+    if (r.status === "ok" && hasPendingImages(r.entry)) loadPendingImages(r.entry.word, seq);
     showToast("사전 내용을 최신으로 새로고침했어요!");
-  }, [word, showToast]);
+  }, [word, showToast, loadPendingImages]);
 
 
 
@@ -306,7 +354,7 @@ export default function App() {
       }
     } else if (shareIdParam) {
       fetch(`/api/share-topic?id=${encodeURIComponent(shareIdParam)}`)
-        .then((res) => (res.ok ? res.json() : null))
+        .then((res) => (res.ok ? (res.json() as Promise<{ status?: string }>) : null))
         .then((data) => {
           if (data && data.status === "ok") {
             importTopic(data as { title?: string; emoji?: string; words?: string[] });

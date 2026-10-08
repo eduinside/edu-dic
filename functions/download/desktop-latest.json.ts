@@ -1,5 +1,5 @@
 // GET & HEAD /api/download/desktop-latest.json — Tauri 자동 업데이트 확인용 매니페스트
-import type { Env } from "../../_shared.ts";
+import type { Env } from "../_shared.ts";
 
 const MANIFEST_KEY = "desktop-latest.json";
 

@@ -103,7 +103,14 @@ Write-Host ("완료: {0} ({1:N1} MB) · sha256 {2}" -f $exe, $size, $sig.sha256)
 # 7) 커밋
 if (-not $NoCommit) {
     & $git -C $repo add -- 'desktop/Directory.Build.props' 'desktop/CHANGELOG.md'
-    & $git -C $repo commit -m "chore(desktop): $next 릴리스 — $Notes" | Out-Null
+    # git 사용자 설정이 없는 PC면 마지막 커밋의 작성자를 그대로 쓴다
+    $who = @()
+    if (-not (& $git -C $repo config user.email)) {
+        $a = (& $git -C $repo log -1 --format='%an|%ae').Split('|')
+        $who = @('-c', "user.name=$($a[0])", '-c', "user.email=$($a[1])")
+    }
+    & $git -C $repo @who commit -m "chore(desktop): $next 릴리스 — $Notes" | Out-Null
+    if ($LASTEXITCODE -ne 0) { throw '커밋 실패' }
     Write-Host "커밋: chore(desktop): $next 릴리스"
 }
 

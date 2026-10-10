@@ -1,6 +1,6 @@
 # 데스크탑 앱 C#(.NET) 전환 계획 (2026-10-10)
 
-> 상태: 구현·시험 완료, 배포 전 · 대상: `desktop/` (Tauri v2 0.3.0 → .NET 10 WPF + Blazor Hybrid 0.4.0)
+> 상태: 0.4.2 배포 완료 · 대상: `desktop/` (Tauri v2 0.3.0 → .NET 10 WPF + Blazor Hybrid 0.4.0)
 
 ## 1. 목표
 

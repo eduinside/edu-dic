@@ -4,8 +4,8 @@ using System.Windows;
 namespace EduDic.App;
 
 /// <summary>
-/// 시작 순서: --uninstall → 제거 / 설치 폴더 밖이면 → 설치기 / 아니면 앱(트레이·단축키·자동 업데이트).
-/// 옵션: --autostart(창 없이 트레이로 시작) · --installed(설치 직후 안내) · --wait-pid N(앞 프로세스가 끝나길 기다림)
+/// 시작 순서: --uninstall → 제거 / --finish-install → 설치 마무리 후 앱 / 아니면 앱(트레이·단축키·자동 업데이트).
+/// 설치는 설치 프로그램(EduDic.Setup)이 한다. 옵션: --autostart(창 없이 트레이로) · --fresh(처음 설치) · --wait-pid N(앞 프로세스를 기다림)
 /// </summary>
 public partial class App : Application
 {
@@ -33,12 +33,8 @@ public partial class App : Application
             catch (ArgumentException) { /* 이미 끝남 */ }
         }
 
-        if (Installer.ShouldInstall(args))
-        {
-            Installer.Install();
-            Shutdown();
-            return;
-        }
+        // 설치 프로그램이 파일을 깐 뒤: 바로가기·제거 정보·옛 앱 정리
+        if (args.Contains("--finish-install")) Installer.Finish(fresh: args.Contains("--fresh"));
 
         if (!SingleInstance.Acquire(waitForPrevious: wi >= 0))
         {
@@ -69,7 +65,7 @@ public partial class App : Application
             window.Show();
             window.ShowAndFocus();
         }
-        if (args.Contains("--installed"))
+        if (args.Contains("--finish-install") && !args.Contains("--autostart"))
             tray.Balloon(AppPaths.ProductName, hotKey.Registered
                 ? "설치했어요. 언제든 Ctrl+Alt+D 를 누르면 사전이 열려요."
                 : "설치했어요. 트레이의 사전 아이콘을 누르면 열려요.");

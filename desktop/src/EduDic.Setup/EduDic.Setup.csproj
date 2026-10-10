@@ -1,0 +1,37 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- 설치 프로그램: .NET Framework 4.8(Windows 10·11 기본 포함)이라 런타임을 싣지 않아 작다.
+       다운로드 링크·옛 Tauri 업데이터·0.4.x 업데이터가 모두 이 파일을 받는다 (docs/plan-desktop-dotnet.md §7) -->
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net48</TargetFramework>
+    <UseWindowsForms>true</UseWindowsForms>
+    <AssemblyName>어린이 쉬운 사전 설치</AssemblyName>
+    <RootNamespace>EduDic.Setup</RootNamespace>
+    <Product>어린이 쉬운 사전 데스크탑 설치</Product>
+    <Company>dgedu.link</Company>
+    <ApplicationIcon>..\EduDic.App\app.ico</ApplicationIcon>
+    <ApplicationManifest>app.manifest</ApplicationManifest>
+    <ImplicitUsings>disable</ImplicitUsings>
+    <DebugType>none</DebugType>
+    <AutoGenerateBindingRedirects>false</AutoGenerateBindingRedirects>
+    <GenerateSupportedRuntime>false</GenerateSupportedRuntime>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- 앱과 같은 설치·팩 코드 -->
+    <Compile Include="..\EduDic.Core\Install.cs" Link="Install.cs" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Reference Include="System.IO.Compression" />
+    <Reference Include="System.IO.Compression.FileSystem" />
+    <Reference Include="System.Net.Http" />
+    <Reference Include="System.Runtime.Serialization" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.NETFramework.ReferenceAssemblies" Version="1.0.3" PrivateAssets="all" />
+  </ItemGroup>
+
+</Project>

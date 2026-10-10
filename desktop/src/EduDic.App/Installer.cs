@@ -6,9 +6,9 @@ using Microsoft.Win32;
 namespace EduDic.App;
 
 /// <summary>
-/// 스스로 설치하는 exe. 설치 폴더 밖(내려받기 폴더·옛 Tauri 업데이터의 임시 폴더)에서 실행되면
-/// 자신을 %LOCALAPPDATA%\Programs\EduDic 에 복사하고 바로가기·제거 정보를 만든 뒤 설치한 앱을 띄운다.
-/// 옛 Tauri 앱(0.3.0 이하)이 있으면 조용히 지우고 시작 프로그램 등록은 이어 받는다 (docs/plan-desktop-dotnet.md §3).
+/// 설치 마무리 · 제거. 파일은 설치 프로그램(EduDic.Setup)이 versions\버전 에 깔고 app 정션을 맞춘 뒤
+/// 앱을 --finish-install 로 띄운다 → 여기서 바로가기·제거 정보·시작 프로그램을 맞추고, 옛 앱을 정리한다:
+/// 옛 Tauri 앱(0.3.0 이하)은 제거 프로그램으로, 0.4.x 단일 exe 는 파일만 지운다 (docs/plan-desktop-dotnet.md §3, §7).
 /// </summary>
 public static class Installer
 {
@@ -19,55 +19,27 @@ public static class Installer
     static string StartMenuLink => Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.Programs), AppPaths.ProductName + ".lnk");
     static string DesktopLink => Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.DesktopDirectory), AppPaths.ProductName + ".lnk");
 
-    /// <summary>설치기로 동작해야 하나: 배포판(Release)이고 설치 폴더 밖에서 실행됐을 때</summary>
-    public static bool ShouldInstall(string[] args)
-    {
-#if DEBUG
-        return args.Contains("--install");
-#else
-        return !AppPaths.RunningInstalled && !args.Contains("--no-install") && Environment.GetEnvironmentVariable("EDUDIC_NO_INSTALL") == null;
-#endif
-    }
-
-    public static void Install()
+    /// <summary>설치 프로그램이 파일을 깐 뒤 부른다. fresh = 이 PC에 처음 설치</summary>
+    public static void Finish(bool fresh)
     {
         try
         {
-            var fresh = !File.Exists(AppPaths.InstallExe);
-            // 1) 떠 있는 앱 끄기: 새 앱 → 신호, 옛 Tauri 앱 → 프로세스 종료
-            SingleInstance.QuitRunning(TimeSpan.FromSeconds(10));
             foreach (var p in Process.GetProcessesByName(OldProcess))
                 using (p) { try { p.Kill(); p.WaitForExit(5000); } catch (Exception) { } }
 
-            // 2) 옛 Tauri 앱 정리 (시작 프로그램 등록 여부는 먼저 기억해 둔다)
+            // 시작 프로그램 등록은 옛 앱 것까지 기억해 두었다가 새 경로로 다시 건다
             var autostart = Autostart.IsEnabled;
             var oldRemoved = RemoveTauriApp();
+            var hadDesktopLink = File.Exists(DesktopLink);
 
-            // 3) 자신을 설치 폴더로 복사
-            Directory.CreateDirectory(AppPaths.InstallDir);
-            CopyWithRetry(AppPaths.CurrentExe, AppPaths.InstallExe);
-
-            // 4) 바로가기·제거 정보·시작 프로그램
             CreateShortcut(StartMenuLink);
-            if (fresh || oldRemoved) CreateShortcut(DesktopLink);
+            if (fresh || oldRemoved || hadDesktopLink) CreateShortcut(DesktopLink);
             WriteUninstallInfo();
             if (autostart) Autostart.Set(true, AppPaths.InstallExe);
-
-            Process.Start(new ProcessStartInfo(AppPaths.InstallExe, "--installed") { UseShellExecute = false, WorkingDirectory = AppPaths.InstallDir });
         }
         catch (Exception e)
         {
-            MessageBox.Show($"설치하지 못했어요.\n\n{e.Message}", AppPaths.ProductName, MessageBoxButton.OK, MessageBoxImage.Warning);
-        }
-    }
-
-    static void CopyWithRetry(string from, string to)
-    {
-        if (string.Equals(Path.GetFullPath(from), Path.GetFullPath(to), StringComparison.OrdinalIgnoreCase)) return;
-        for (var i = 0; ; i++)
-        {
-            try { File.Copy(from, to, overwrite: true); return; }
-            catch (IOException) when (i < 20) { Thread.Sleep(500); } // 앞 프로세스가 아직 파일을 잡고 있음
+            MessageBox.Show($"설치를 마무리하지 못했어요.\n\n{e.Message}", AppPaths.ProductName, MessageBoxButton.OK, MessageBoxImage.Warning);
         }
     }
 
@@ -115,7 +87,7 @@ public static class Installer
             dynamic shell = Activator.CreateInstance(type)!;
             var lnk = shell.CreateShortcut(lnkPath);
             lnk.TargetPath = AppPaths.InstallExe;
-            lnk.WorkingDirectory = AppPaths.InstallDir;
+            lnk.WorkingDirectory = Core.InstallLayout.AppDir;
             lnk.IconLocation = AppPaths.InstallExe + ",0";
             lnk.Description = "궁금한 낱말을 바로 찾아요 (Ctrl+Alt+D)";
             lnk.Save();
@@ -136,7 +108,12 @@ public static class Installer
         k.SetValue("QuietUninstallString", $"\"{AppPaths.InstallExe}\" --uninstall --quiet");
         k.SetValue("NoModify", 1, RegistryValueKind.DWord);
         k.SetValue("NoRepair", 1, RegistryValueKind.DWord);
-        try { k.SetValue("EstimatedSize", (int)(new FileInfo(AppPaths.InstallExe).Length / 1024), RegistryValueKind.DWord); } catch (IOException) { }
+        try
+        {
+            var bytes = new DirectoryInfo(AppPaths.OwnVersionDir).EnumerateFiles("*", SearchOption.AllDirectories).Sum(f => f.Length);
+            k.SetValue("EstimatedSize", (int)(bytes / 1024), RegistryValueKind.DWord);
+        }
+        catch (IOException) { }
     }
 
     /// <summary>자동 업데이트 뒤 ‘앱 및 기능’의 버전 표시를 맞춘다</summary>
@@ -154,16 +131,16 @@ public static class Installer
     {
         if (!quiet && MessageBox.Show("어린이 쉬운 사전 데스크탑을 지울까요?", AppPaths.ProductName, MessageBoxButton.YesNo, MessageBoxImage.Question) != MessageBoxResult.Yes)
             return;
-        SingleInstance.QuitRunning(TimeSpan.FromSeconds(10));
+        Core.InstallLayout.QuitRunning(TimeSpan.FromSeconds(10));
         try { Autostart.Set(false, AppPaths.InstallExe); } catch (Exception) { }
         foreach (var l in new[] { StartMenuLink, DesktopLink }) try { File.Delete(l); } catch (Exception) { }
         try { Registry.CurrentUser.DeleteSubKeyTree(UninstallKey, throwOnMissingSubKey: false); } catch (Exception) { }
-        try { Directory.Delete(AppPaths.DataDir, recursive: true); } catch (Exception) { }
-        // 실행 중인 exe 와 그 exe 가 %TEMP%\.net 에 풀어 둔 DLL 은 바로 못 지운다(지우다 말면 다음 실행이 깨진다)
-        // → 이 프로세스가 끝난 뒤 둘 다 폴더째 지운다 (끝나는 데 몇 초 걸려 30초까지 다시 시도)
+        // 실행 중인 버전 폴더·막 끈 화면 엔진(WebView2)이 잡고 있는 데이터 폴더는 바로 못 지운다
+        // → 이 프로세스가 끝난 뒤 둘 다 지운다 (30초까지 다시 시도). 0.4.x 가 %TEMP%\.net 에 풀어 둔 DLL 폴더도 함께
         var dir = AppPaths.InstallDir;
+        var data = AppPaths.DataDir;
         var extracted = Path.Combine(Path.GetTempPath(), ".net", Path.GetFileNameWithoutExtension(AppPaths.ExeName));
-        Process.Start(new ProcessStartInfo("cmd.exe", $"/c for /l %i in (1,1,30) do (ping 127.0.0.1 -n 2 > nul & rmdir /s /q \"{dir}\" 2> nul & if not exist \"{dir}\" (rmdir /s /q \"{extracted}\" 2> nul & exit))")
+        Process.Start(new ProcessStartInfo("cmd.exe", $"/c for /l %i in (1,1,30) do (ping 127.0.0.1 -n 2 > nul & rmdir /s /q \"{dir}\" 2> nul & rmdir /s /q \"{data}\" 2> nul & rmdir /s /q \"{extracted}\" 2> nul & if not exist \"{dir}\" if not exist \"{data}\" exit)")
         {
             UseShellExecute = false,
             CreateNoWindow = true,

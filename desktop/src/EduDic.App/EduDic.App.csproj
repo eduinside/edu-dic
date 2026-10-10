@@ -11,7 +11,7 @@
     <Product>어린이 쉬운 사전 데스크탑</Product>
     <Company>dgedu.link</Company>
     <ApplicationIcon>app.ico</ApplicationIcon>
-    <!-- 단일 exe: wwwroot를 exe 안에 넣고 거기서 읽는다 (업무노트와 같은 방식) -->
+    <!-- wwwroot·Blazor 스크립트는 앱 dll 안에 넣고 거기서 읽는다 (업무노트와 같은 방식) -->
     <GenerateEmbeddedFilesManifest>true</GenerateEmbeddedFilesManifest>
     <RuntimeIdentifier>win-x64</RuntimeIdentifier>
     <SelfContained>true</SelfContained>
@@ -29,13 +29,10 @@
   </ItemGroup>
 
   <PropertyGroup Condition="'$(Configuration)' == 'Release'">
-    <PublishSingleFile>true</PublishSingleFile>
-    <IncludeNativeLibrariesForSelfExtract>true</IncludeNativeLibrariesForSelfExtract>
-    <!-- 내려받는 크기(설치·자동 업데이트)를 줄이려고 압축한다(202→80MB, 사설 메모리 154→237MB).
-         IncludeAllContentForSelfExtract(전부 %TEMP%\.net 에 풀어 쓰기)는 쓰지 않는다 — 임시 폴더 정리로 파일 일부가 사라지면
-         System.Diagnostics.Tracing 을 못 찾고 죽는 것을 0.4.1 실기에서 확인 (2026-10-10) -->
-    <EnableCompressionInSingleFile>true</EnableCompressionInSingleFile>
+    <!-- 0.5.0부터 폴더 게시: 파일을 팩(app·web·runtime)으로 나눠 바뀐 팩만 업데이트한다 (docs/plan-desktop-dotnet.md §7).
+         0.4.x 의 단일 exe(압축 80MB)는 패치마다 전체를 받아야 했다 -->
     <DebugType>none</DebugType>
+    <GenerateDocumentationFile>false</GenerateDocumentationFile>
   </PropertyGroup>
 
   <ItemGroup>

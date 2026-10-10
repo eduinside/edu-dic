@@ -1,38 +1,36 @@
 using System.Diagnostics;
 using System.IO;
 using System.Net.Http;
-using System.Windows;
 using EduDic.Core;
 
 namespace EduDic.App;
 
 /// <summary>
-/// 자동 업데이트 (소수점 버전까지): 시작 20초 뒤와 6시간마다 매니페스트를 확인 → 더 높은 버전이면 내려받아
-/// SHA-256·ECDSA 서명 확인 → 창이 숨겨져 있을 때 exe 를 바꾸고 다시 시작한다. 실패는 조용히 넘어가 다음에 다시.
-/// 설치 폴더에서 실행 중일 때만 동작한다 (개발 실행·내려받기 폴더 실행 제외).
+/// 자동 업데이트 (소수점 버전까지, 변경분만): 시작 20초 뒤와 6시간마다 매니페스트를 확인 → 더 높은 버전이면
+/// 바뀐 팩만 내려받아 해시·서명 확인 → 새 버전 폴더를 만들고(안 바뀐 팩은 지금 폴더에서 하드 링크)
+/// 창이 숨겨져 있을 때 app 정션을 바꾸고 다시 시작한다. 실패는 조용히 넘어가 다음에 다시 (docs/plan-desktop-dotnet.md §7).
+/// 설치된 앱으로 실행 중일 때만 동작한다 (개발 실행 제외).
 /// </summary>
 public sealed class Updater(MainWindow window, Action shutdown) : IDisposable
 {
     static readonly TimeSpan FirstCheck = TimeSpan.FromSeconds(20);
     static readonly TimeSpan Interval = TimeSpan.FromHours(6);
 
-    readonly HttpClient http = new() { Timeout = TimeSpan.FromMinutes(10) };
+    readonly HttpClient http = new() { Timeout = TimeSpan.FromMinutes(20) };
     readonly CancellationTokenSource stop = new();
-    string? ready; // 검증을 마친 새 exe
-
-    static string NewExe => AppPaths.InstallExe + ".new";
-    static string OldExe => AppPaths.InstallExe + ".old";
+    string? ready; // 다 만든 새 버전 폴더
 
     public void Start()
     {
         if (!AppPaths.RunningInstalled) return;
-        try { if (File.Exists(OldExe)) File.Delete(OldExe); } catch (Exception) { }
         Installer.RefreshVersion();
         http.DefaultRequestHeaders.UserAgent.ParseAdd($"EduDicDesktop/{AppPaths.Version}");
         _ = Task.Run(async () =>
         {
             try
             {
+                await Task.Delay(TimeSpan.FromSeconds(3), stop.Token);
+                CleanUp();
                 await Task.Delay(FirstCheck, stop.Token);
                 while (!stop.IsCancellationRequested)
                 {
@@ -46,27 +44,37 @@ public sealed class Updater(MainWindow window, Action shutdown) : IDisposable
         window.IsVisibleChanged += (_, _) => { if (!window.IsVisible) TryApply(); };
     }
 
+    /// <summary>지난 버전 폴더·만들다 만 폴더·0.4.x 단일 exe 정리 (쓰는 중이면 다음에)</summary>
+    static void CleanUp()
+    {
+        var own = Path.GetFullPath(AppPaths.OwnVersionDir).TrimEnd('\\');
+        if (Directory.Exists(InstallLayout.VersionsDir))
+            foreach (var d in Directory.GetDirectories(InstallLayout.VersionsDir))
+                if (!string.Equals(Path.GetFullPath(d).TrimEnd('\\'), own, StringComparison.OrdinalIgnoreCase))
+                    try { Directory.Delete(d, true); } catch (Exception) { }
+        foreach (var f in new[] { InstallLayout.LegacyExe, InstallLayout.LegacyExe + ".old", InstallLayout.LegacyExe + ".new" })
+            try { if (File.Exists(f)) File.Delete(f); } catch (Exception) { }
+    }
+
     async Task CheckAsync(CancellationToken ct)
     {
         if (ready != null) { TryApply(); return; }
-        using var req = new HttpRequestMessage(HttpMethod.Get, UpdateManifest.ManifestUrl);
+        using var req = new HttpRequestMessage(HttpMethod.Get, InstallLayout.EffectiveManifestUrl);
         req.Headers.CacheControl = new() { NoCache = true };
         using var res = await http.SendAsync(req, ct);
         if (!res.IsSuccessStatusCode) return;
         var m = UpdateManifest.Parse(await res.Content.ReadAsStringAsync(ct));
-        if (m == null || !AppVersion.TryParse(AppPaths.Version, out var current) || !AppVersion.IsNewer(m.Version, current)) return;
+        if (m == null || !m.Verified()) return;
+        if (!AppVersion.TryParse(AppPaths.Version, out var current) || !AppVersion.IsNewer(m.Version, current)) return;
 
-        // 내려받기 → 해시·서명 확인 (하나라도 틀리면 버린다)
-        await using (var src = await http.GetStreamAsync(m.Url, ct))
-        await using (var dst = File.Create(NewExe))
-            await src.CopyToAsync(dst, ct);
-        var sha = UpdateSignature.Sha256Hex(NewExe);
-        if (sha != m.Sha256 || !UpdateSignature.Verify(m.Version, sha, m.Signature))
+        var dir = InstallLayout.VersionDir(AppVersion.Text(m.Version));
+        await Packs.BuildAsync(dir, m.Packs.ToList(), AppPaths.OwnVersionDir, async (pack, path) =>
         {
-            File.Delete(NewExe);
-            return;
-        }
-        ready = NewExe;
+            await using var src = await http.GetStreamAsync(pack.Url, ct);
+            await using var dst = File.Create(path);
+            await src.CopyToAsync(dst, ct);
+        });
+        ready = dir;
         TryApply();
     }
 
@@ -77,24 +85,24 @@ public sealed class Updater(MainWindow window, Action shutdown) : IDisposable
         window.Dispatcher.BeginInvoke(() =>
         {
             if (ready == null || window.IsVisible) return;
+            var dir = ready;
+            ready = null;
             try
             {
-                // 실행 중인 exe 는 지울 수는 없어도 이름은 바꿀 수 있다
-                if (File.Exists(OldExe)) File.Delete(OldExe);
-                File.Move(AppPaths.InstallExe, OldExe);
-                try { File.Move(ready, AppPaths.InstallExe); }
-                catch (Exception) { File.Move(OldExe, AppPaths.InstallExe); throw; }
-                ready = null;
-                Process.Start(new ProcessStartInfo(AppPaths.InstallExe, $"--wait-pid {Environment.ProcessId} --autostart")
+                var exe = Path.Combine(dir, AppPaths.ExeName);
+                if (!File.Exists(exe)) return;
+                InstallLayout.PointAppTo(dir);
+                Process.Start(new ProcessStartInfo(exe, $"--wait-pid {Environment.ProcessId} --autostart")
                 {
                     UseShellExecute = false,
-                    WorkingDirectory = AppPaths.InstallDir,
+                    WorkingDirectory = dir,
                 });
                 shutdown();
             }
             catch (Exception)
             {
-                ready = null; // 다음 확인 때 다시 내려받는다
+                // 정션을 못 바꿨으면 지금 버전으로 되돌려 두고 다음 확인 때 다시
+                try { InstallLayout.PointAppTo(AppPaths.OwnVersionDir); } catch (Exception) { }
             }
         });
     }

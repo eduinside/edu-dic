@@ -2,7 +2,7 @@ namespace EduDic.App;
 
 /// <summary>
 /// 앱을 하나만: 두 번째 실행은 이미 떠 있는 창을 앞으로 부르고 끝낸다.
-/// 설치기·제거기는 Quit 신호로 떠 있는 앱을 끈다.
+/// 설치 프로그램·제거는 Quit 신호로 떠 있는 앱을 끈다 (Core.InstallLayout.QuitRunning).
 /// </summary>
 public static class SingleInstance
 {
@@ -38,17 +38,5 @@ public static class SingleInstance
                 else { quit(); return; }
             }
         }) { IsBackground = true, Name = "EduDic single instance" }.Start();
-    }
-
-    /// <summary>떠 있는 앱을 끄고 끝날 때까지 기다린다 (설치·제거용). 떠 있지 않았으면 바로 true</summary>
-    public static bool QuitRunning(TimeSpan timeout)
-    {
-        if (!Mutex.TryOpenExisting(Base, out var m)) return true;
-        using (m)
-        {
-            if (EventWaitHandle.TryOpenExisting(Base + "-Quit", out var q)) using (q) q.Set();
-            try { if (!m.WaitOne(timeout)) return false; m.ReleaseMutex(); return true; }
-            catch (AbandonedMutexException) { return true; }
-        }
     }
 }

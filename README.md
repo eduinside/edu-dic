@@ -41,8 +41,8 @@
 - **전역 단축키(`Ctrl+Alt+D`)**: 수업 중 언제 어디서든 슬림한 캡슐 스팟라이트 창 호출.
 - **전체화면(F11) 모드**: 버튼 클릭 또는 `F11` 키로 모니터 화면 전체를 100% 가득 채우는 깨끗한 화이트보드 대형 사전 모드 전환.
 - **시스템 트레이 상주**: 트레이 아이콘 우클릭 메뉴에서 현재 버전 확인 및 누리집 바로가기 지원.
-- **소수점 버전까지 자동 업데이트**: 시작할 때와 6시간마다 새 버전을 확인해, 창이 숨겨져 있을 때 조용히 바꿉니다. 내려받은 파일은 SHA-256·ECDSA 서명으로 확인합니다(Cloudflare R2 `edu-dic-downloads`).
-- **설치가 따로 없는 exe 하나**: 내려받아 실행하면 스스로 설치되고(관리자 권한 불필요), 옛 Tauri 판(0.3.0 이하)은 자동 업데이트로 새 판으로 넘어옵니다.
+- **소수점 버전까지, 변경분만 받는 자동 업데이트**: 시작할 때와 6시간마다 새 버전을 확인해 바뀐 부분(보통 1MB 안팎)만 받아, 창이 숨겨져 있을 때 조용히 바꿉니다. 내려받은 파일은 SHA-256·ECDSA 서명으로 확인합니다(Cloudflare R2 `edu-dic-downloads`).
+- **작은 설치 프로그램**(약 130KB, 관리자 권한 불필요): 실행하면 필요한 파일을 받아 설치합니다. 옛 Tauri 판(0.3.0)·0.4.x 판은 자동 업데이트로 새 판으로 넘어옵니다.
 
 ---
 
@@ -75,7 +75,7 @@ cd desktop
 D:\Setup\DevTools\dotnet\dotnet.exe build EduDic.slnx
 D:\Setup\DevTools\dotnet\dotnet.exe test tests\EduDic.Tests
 
-# 릴리스: 패치 번호 자동 +1 → 시험 → 단일 exe → 서명 → 매니페스트 → 커밋 (-Upload 면 R2 배포까지)
+# 릴리스: 패치 번호 자동 +1 → 시험 → 앱 게시·설치 프로그램 → 팩·서명 → 매니페스트 → 커밋 (-Upload 면 R2 배포까지)
 powershell -ExecutionPolicy Bypass -File tools\release.ps1 -Notes "바뀐 점" -Upload
 ```
 
@@ -107,9 +107,10 @@ edu-dic/
 │   ├── lib/              # krdict, encykorea, naver, ai, choseong, dictionary 등
 │   └── _middleware.ts    # 전역 CORS 및 보안 헤더 처리
 ├── desktop/              # Windows 데스크탑 앱 (C# .NET 10)
-│   ├── src/EduDic.Core/  # 사전 API·화면 규칙·업데이트 서명 검증
+│   ├── src/EduDic.Core/  # 사전 API·화면 규칙·설치/팩/서명 확인(설치 프로그램과 공용)
 │   ├── src/EduDic.App/   # 스팟라이트 창, 트레이, 전역 단축키(Ctrl+Alt+D), 설치·자동 업데이트, Blazor 화면
-│   └── tools/            # release.ps1(버전 올림~배포), EduDic.Sign(서명)
+│   ├── src/EduDic.Setup/ # 설치 프로그램(.NET Framework 4.8, 약 130KB)
+│   └── tools/            # release.ps1(버전 올림~배포), EduDic.Sign(팩·서명)
 └── docs/                 # PLAN.md, STATUS.md
 ```
 

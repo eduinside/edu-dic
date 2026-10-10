@@ -1,7 +1,7 @@
 <Project>
   <PropertyGroup>
     <!-- 앱 버전은 여기 한 곳 — tools/release.ps1 이 패치 번호를 자동으로 올린다 -->
-    <Version>0.4.1</Version>
+    <Version>0.4.2</Version>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
     <LangVersion>latest</LangVersion>

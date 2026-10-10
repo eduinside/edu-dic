@@ -1,0 +1,107 @@
+@* 결과 카드 — 옛 DedicatedResultCard 와 같은 구성 *@
+@{
+    var homographs = DictView.Homographs(Entry);
+    var safe = HomoIndex < homographs.Count ? HomoIndex : 0;
+    var active = homographs[safe];
+    var usingEasy = Level == "easy" && active.EasySenses != null;
+    var senses = usingEasy ? active.EasySenses! : active.Senses;
+    var primary = senses.FirstOrDefault();
+    var rest = senses.Skip(1).ToList();
+}
+<div class="card">
+    <div class="head">
+        <div>
+            <div class="title-row">
+                <h1 class="word">@Entry.Word</h1>
+                <button type="button" class="voice" @onclick="() => OnSpeak.InvokeAsync(active.Audio?.Url)" title="발음 및 소리 듣기"><I N="volume" /></button>
+            </div>
+            <div class="meta">
+                @if (!string.IsNullOrEmpty(Entry.Reading))
+                {
+                    <span>[@Entry.Reading]</span>
+                }
+                @if (!string.IsNullOrEmpty(active.Pos))
+                {
+                    <span class="chip">@active.Pos</span>
+                }
+                @if (!string.IsNullOrEmpty(active.Level))
+                {
+                    <span class="chip lv">@active.Level</span>
+                }
+            </div>
+        </div>
+        <div class="seg">
+            <button class="@(Level == "dict" ? "on" : "")" @onclick='() => LevelChanged.InvokeAsync("dict")'><I N="book" /><span>원문</span></button>
+            <button class="@(Level == "easy" ? "on" : "")" @onclick='() => LevelChanged.InvokeAsync("easy")'><I N="sparkles" /><span>쉬운말</span></button>
+        </div>
+    </div>
+
+    @if (homographs.Count > 1)
+    {
+        <div class="homos">
+            @for (var i = 0; i < homographs.Count; i++)
+            {
+                var idx = i;
+                <button class="homo @(idx == safe ? "on" : "")" @onclick="() => HomoIndexChanged.InvokeAsync(idx)"><b>@(idx + 1)</b>@DictView.Preview(homographs[idx])</button>
+            }
+        </div>
+    }
+
+    <div class="senses">
+        @if (Level == "easy" && !usingEasy && Simplifying)
+        {
+            <p class="simplifying">쉬운 말로 바꾸는 중…</p>
+        }
+        @if (primary != null)
+        {
+            <p class="def">@primary.Def</p>
+        }
+        @if (!string.IsNullOrEmpty(primary?.Example))
+        {
+            <div class="example">
+                <div class="example-row">
+                    <span class="example-label">예문</span>
+                    <span class="example-text"><Highlight Text="@primary.Example" Word="@Entry.Word" /></span>
+                </div>
+            </div>
+        }
+        @if (active.Image != null)
+        {
+            <div class="pic"><img src="@active.Image.Url" alt="@($"{Entry.Word} 그림")" /></div>
+        }
+        <div class="foot">
+            <span class="src">@DictView.SourceLabel(Entry, active.Image)</span>
+            <button class="web" @onclick="OnOpenWeb"><I N="external" /><span>누리집에서 보기</span></button>
+        </div>
+        @if (rest.Count > 0)
+        {
+            <details class="more">
+                <summary>다른 뜻 더 보기 (@rest.Count)</summary>
+                <ul>
+                    @for (var i = 0; i < rest.Count; i++)
+                    {
+                        var s = rest[i];
+                        <li>
+                            <div class="more-def"><b>@(i + 2).</b><span>@s.Def</span></div>
+                            @if (!string.IsNullOrEmpty(s.Example))
+                            {
+                                <div class="more-ex"><span class="lbl">예:</span><span class="t"><Highlight Text="@s.Example" Word="@Entry.Word" /></span></div>
+                            }
+                        </li>
+                    }
+                </ul>
+            </details>
+        }
+    </div>
+</div>
+
+@code {
+    [Parameter, EditorRequired] public DictEntry Entry { get; set; } = default!;
+    [Parameter] public string Level { get; set; } = "dict";
+    [Parameter] public EventCallback<string> LevelChanged { get; set; }
+    [Parameter] public int HomoIndex { get; set; }
+    [Parameter] public EventCallback<int> HomoIndexChanged { get; set; }
+    [Parameter] public bool Simplifying { get; set; }
+    [Parameter] public EventCallback OnOpenWeb { get; set; }
+    [Parameter] public EventCallback<string?> OnSpeak { get; set; }
+}

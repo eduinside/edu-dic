@@ -1,0 +1,57 @@
+<Project Sdk="Microsoft.NET.Sdk.Razor">
+
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net10.0-windows10.0.19041.0</TargetFramework>
+    <UseWPF>true</UseWPF>
+    <!-- 트레이 아이콘(NotifyIcon)만 WinForms 에서 빌려 쓴다 -->
+    <UseWindowsForms>true</UseWindowsForms>
+    <RootNamespace>EduDic.App</RootNamespace>
+    <AssemblyName>어린이 쉬운 사전</AssemblyName>
+    <Product>어린이 쉬운 사전 데스크탑</Product>
+    <Company>dgedu.link</Company>
+    <ApplicationIcon>app.ico</ApplicationIcon>
+    <!-- 단일 exe: wwwroot를 exe 안에 넣고 거기서 읽는다 (업무노트와 같은 방식) -->
+    <GenerateEmbeddedFilesManifest>true</GenerateEmbeddedFilesManifest>
+    <RuntimeIdentifier>win-x64</RuntimeIdentifier>
+    <SelfContained>true</SelfContained>
+    <!-- 늘 떠 있는 작은 앱: 메모리를 덜 쓰는 쪽으로 -->
+    <ConcurrentGarbageCollection>false</ConcurrentGarbageCollection>
+    <ServerGarbageCollector>false</ServerGarbageCollector>
+    <TieredPGO>false</TieredPGO>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <RuntimeHostConfigurationOption Include="System.GC.ConserveMemory" Value="7" />
+    <!-- WinForms 는 트레이에만: 전역 using 이 WPF 이름과 겹치지 않게 뺀다 -->
+    <Using Remove="System.Windows.Forms" />
+    <Using Remove="System.Drawing" />
+  </ItemGroup>
+
+  <PropertyGroup Condition="'$(Configuration)' == 'Release'">
+    <PublishSingleFile>true</PublishSingleFile>
+    <IncludeNativeLibrariesForSelfExtract>true</IncludeNativeLibrariesForSelfExtract>
+    <!-- 내려받는 크기(설치·자동 업데이트)를 줄이려고 압축하고(202→84MB), 처음 실행 때 %TEMP%\.net 에 한 번 풀어 쓴다.
+         압축만 하면 실행할 때마다 메모리에 풀어 사설 메모리가 237MB, 풀어 쓰면 154MB (2026-10-10 실측) -->
+    <EnableCompressionInSingleFile>true</EnableCompressionInSingleFile>
+    <IncludeAllContentForSelfExtract>true</IncludeAllContentForSelfExtract>
+    <DebugType>none</DebugType>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <EmbeddedResource Include="wwwroot\**" />
+    <EmbeddedResource Include="$(PkgMicrosoft_AspNetCore_Components_WebView)\staticwebassets\blazor.webview.js" LogicalName="framework/blazor.webview.js" />
+    <Resource Include="app.ico" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.AspNetCore.Components.WebView.Wpf" Version="10.0.110" />
+    <PackageReference Include="Microsoft.AspNetCore.Components.WebView" Version="10.0.0" GeneratePathProperty="true" />
+    <PackageReference Include="Microsoft.Extensions.FileProviders.Embedded" Version="10.0.12" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\EduDic.Core\EduDic.Core.csproj" />
+  </ItemGroup>
+
+</Project>

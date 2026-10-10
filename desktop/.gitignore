@@ -1,5 +1,9 @@
-node_modules
-dist
-src-tauri/target
-src-tauri/gen
-src-tauri/updater.key
+bin/
+obj/
+release/
+keys/
+node_modules/
+dist/
+# 옛 Tauri 빌드 부산물·업데이트 서명 개인키(옛 앱 전환용으로 계속 사용) — 절대 커밋 금지
+src-tauri/
+*.pem

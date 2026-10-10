@@ -1,0 +1,8 @@
+{
+  "name": "edu-dic-desktop-tools",
+  "private": true,
+  "description": "릴리스 서명 전용 — 옛 Tauri 앱(0.3.0 이하)이 새 버전을 받을 수 있게 minisign 서명을 함께 만든다 (release.ps1)",
+  "devDependencies": {
+    "@tauri-apps/cli": "2.11.4"
+  }
+}

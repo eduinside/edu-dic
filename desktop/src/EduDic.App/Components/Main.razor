@@ -1,0 +1,285 @@
+@implements IDisposable
+@inject DictClient Dict
+@inject IHost Host
+@inject IJSRuntime JS
+
+@* 옛 App.tsx 와 같은 흐름: 캡슐 검색창 ↔ 결과 화면, 창 높이는 상태에 맞춰 WPF가 바꾼다 *@
+<div class="root @(fullscreen ? "fs" : "")">
+    @if (result?.Ok == true)
+    {
+        <div class="result">
+            <div class="bar" data-drag>
+                <button class="pill-btn back" @onclick="BackToSearch"><I N="arrow-left" /><span>검색으로 (ESC)</span></button>
+                <div class="bar-right">
+                    <button type="button" class="pill-btn fsb" @onclick="ToggleFullscreen" title="@(fullscreen ? "전체화면 종료 (ESC / F11)" : "전체화면으로 보기 (F11)")">
+                        <I N="@(fullscreen ? "minimize" : "maximize")" />
+                        <span>@(fullscreen ? "창 모드로 돌아가기" : "전체화면으로 보기")</span>
+                    </button>
+                    @if (!fullscreen)
+                    {
+                        <button type="button" class="sq-btn" @onclick="Host.HideWindow" title="트레이로 숨기기"><I N="minus" /></button>
+                    }
+                </div>
+            </div>
+            <div class="body">
+                <ResultCard Entry="result.Entry!" Level="@level" LevelChanged="SetLevel" HomoIndex="homoIndex" HomoIndexChanged="SetHomo"
+                            Simplifying="simplifying" OnOpenWeb="OpenWeb" OnSpeak="Speak" />
+            </div>
+        </div>
+    }
+    else
+    {
+        <div class="spot">
+            <form class="capsule" data-drag @onsubmit="Submit">
+                <img class="logo" src="app-icon.png" alt="앱 로고" />
+                <input class="q" value="@query" @oninput="OnInput" type="text" autocomplete="off" spellcheck="false" placeholder="궁금한 낱말을 적어보세요" />
+                @if (loading)
+                {
+                    <I N="loader" Class="spin" />
+                }
+                else if (query.Length > 0)
+                {
+                    <button type="button" class="round-btn clear-btn" @onclick="ClearQuery" title="검색어 지우기"><I N="x" /></button>
+                }
+                <button type="button" class="round-btn hide-btn" @onclick="Host.HideWindow" title="트레이로 숨기기 (ESC)"><I N="minus" /></button>
+                <button type="submit" class="go-btn" disabled="@loading" aria-label="낱말 찾기"><I N="search" /></button>
+            </form>
+
+            @if (toast != null)
+            {
+                <div class="toast">@toast</div>
+            }
+
+            @if (suggestions.Count > 0 && !loading)
+            {
+                <div class="sugs">
+                    <div class="sugs-head"><I N="sparkles" /><span>추천 낱말 (Enter로 바로 보기)</span></div>
+                    <div class="sugs-list">
+                        @for (var i = 0; i < suggestions.Count; i++)
+                        {
+                            var idx = i;
+                            var item = suggestions[i];
+                            <button @key="item" data-sug="@idx" class="sug @(idx == selected ? "on" : "")" @onclick="() => Search(item)" @onmouseenter="() => selected = idx">
+                                <span class="w">@item</span>
+                                <span class="arrow">&rarr;</span>
+                            </button>
+                        }
+                    </div>
+                </div>
+            }
+        </div>
+    }
+</div>
+
+@code {
+    string query = "";
+    List<string> suggestions = [];
+    int selected = -1;
+    LookupResult? result;
+    bool loading;
+    string? toast;
+    string level = "dict";
+    int homoIndex;
+    bool simplifying;
+    bool fullscreen;
+    double lastHeight = -1;
+    CancellationTokenSource? suggestCts, toastCts, simplifyCts;
+    DotNetObjectReference<Main>? self;
+
+    protected override void OnInitialized() => Host.Shown += OnShown;
+
+    protected override async Task OnAfterRenderAsync(bool first)
+    {
+        if (first)
+        {
+            self = DotNetObjectReference.Create(this);
+            await JS.InvokeVoidAsync("dic.init", self);
+            await JS.InvokeVoidAsync("dic.focus", false);
+        }
+        // 창 높이: 검색창 92 · 추천 목록 · 결과 680 (전체화면이면 손대지 않음)
+        if (!fullscreen)
+        {
+            var h = WindowSize.For(result?.Ok == true, suggestions.Count);
+            if (h != lastHeight) { lastHeight = h; Host.SetHeight(h); }
+        }
+    }
+
+    void OnShown() => _ = InvokeAsync(async () =>
+    {
+        fullscreen = Host.IsFullscreen;
+        if (result?.Ok != true) await JS.InvokeVoidAsync("dic.focus", true);
+    });
+
+    // ── 검색창 ───────────────────────────────────────────
+    void OnInput(ChangeEventArgs e)
+    {
+        query = e.Value?.ToString() ?? "";
+        suggestCts?.Cancel();
+        var q = query.Trim();
+        if (q.Length == 0) { suggestions = []; selected = -1; return; }
+        var cts = suggestCts = new CancellationTokenSource();
+        _ = Task.Run(async () =>
+        {
+            try { await Task.Delay(80, cts.Token); } catch (TaskCanceledException) { return; }
+            var list = await Dict.SuggestAsync(q, cts.Token);
+            if (cts.IsCancellationRequested) return;
+            await InvokeAsync(() =>
+            {
+                if (cts.IsCancellationRequested || result?.Ok == true) return;
+                suggestions = list;
+                selected = -1;
+                StateHasChanged();
+            });
+        });
+    }
+
+    async Task Submit()
+    {
+        if (selected >= 0 && selected < suggestions.Count) { await Search(suggestions[selected]); return; }
+        var t = query.Trim();
+        if (t.Length == 0) return;
+        // 초성만 입력하면(예: "ㄷㄱ") 추천 1순위로 바로
+        if (DictView.IsChoseongOnly(t))
+        {
+            if (suggestions.Count > 0) { await Search(suggestions[0]); return; }
+            loading = true;
+            var list = await Dict.SuggestAsync(t);
+            loading = false;
+            if (list.Count > 0) { await Search(list[0]); return; }
+        }
+        await Search(t);
+    }
+
+    async Task Search(string word)
+    {
+        var w = word.Trim();
+        if (w.Length == 0) return;
+        suggestCts?.Cancel();
+        suggestions = [];
+        loading = true;
+        StateHasChanged();
+        var r = await Dict.LookupAsync(w);
+        loading = false;
+        if (r.Ok)
+        {
+            result = r;
+            homoIndex = 0;
+            await MaybeSimplify();
+        }
+        else ShowToast(DictView.FailureMessage(r, w));
+    }
+
+    void ShowToast(string msg)
+    {
+        toast = msg;
+        toastCts?.Cancel();
+        var cts = toastCts = new CancellationTokenSource();
+        _ = Task.Delay(3000, cts.Token).ContinueWith(t =>
+        {
+            if (!t.IsCanceled) _ = InvokeAsync(() => { toast = null; StateHasChanged(); });
+        });
+    }
+
+    async Task ClearQuery()
+    {
+        suggestCts?.Cancel();
+        query = "";
+        suggestions = [];
+        selected = -1;
+        await JS.InvokeVoidAsync("dic.focus", false);
+    }
+
+    // ── 키: F11 전체화면, ESC 단계별 뒤로, ↑↓ 추천 고르기 ─────────
+    [JSInvokable]
+    public async Task OnKey(string key)
+    {
+        switch (key)
+        {
+            case "F11":
+                if (result?.Ok == true) ToggleFullscreen();
+                break;
+            case "Escape":
+                if (fullscreen) { Host.ExitFullscreen(); fullscreen = false; lastHeight = -1; }
+                else if (result != null) { result = null; StateHasChanged(); await Task.Yield(); await JS.InvokeVoidAsync("dic.focus", false); }
+                else if (suggestions.Count > 0) { suggestCts?.Cancel(); suggestions = []; selected = -1; }
+                else Host.HideWindow();
+                break;
+            case "ArrowDown" when suggestions.Count > 0:
+                selected = selected < suggestions.Count - 1 ? selected + 1 : 0;
+                await JS.InvokeVoidAsync("dic.scrollList", selected);
+                break;
+            case "ArrowUp" when suggestions.Count > 0:
+                selected = selected > 0 ? selected - 1 : suggestions.Count - 1;
+                await JS.InvokeVoidAsync("dic.scrollList", selected);
+                break;
+        }
+        StateHasChanged();
+    }
+
+    // ── 결과 화면 ────────────────────────────────────────
+    void ToggleFullscreen()
+    {
+        fullscreen = Host.ToggleFullscreen();
+        lastHeight = -1;
+    }
+
+    async Task BackToSearch()
+    {
+        if (fullscreen) { Host.ExitFullscreen(); fullscreen = false; lastHeight = -1; }
+        result = null;
+        StateHasChanged();
+        await Task.Delay(50);
+        await JS.InvokeVoidAsync("dic.focus", true);
+    }
+
+    void OpenWeb()
+    {
+        Host.OpenUrl(result?.Entry is { } e ? DictView.WebUrl(e, homoIndex) : DictClient.DefaultBase);
+    }
+
+    async Task Speak(string? audioUrl)
+    {
+        if (result?.Entry is { } e) await JS.InvokeVoidAsync("dic.speak", DictView.CleanWord(e.Word), audioUrl);
+    }
+
+    async Task SetLevel(string lv) { level = lv; await MaybeSimplify(); }
+
+    async Task SetHomo(int i) { homoIndex = i; await MaybeSimplify(); }
+
+    /// <summary>"쉬운말"이면 아직 없는 쉬운 뜻풀이를 받아 채운다 (옛 앱과 같이 비동기)</summary>
+    async Task MaybeSimplify()
+    {
+        if (level != "easy" || result?.Entry is not { } entry) return;
+        var multi = entry.Homographs is { Count: > 1 };
+        var already = multi ? entry.Homographs![Math.Min(homoIndex, entry.Homographs.Count - 1)].EasySenses : entry.EasySenses;
+        if (already != null) return;
+        simplifyCts?.Cancel();
+        var cts = simplifyCts = new CancellationTokenSource();
+        var word = entry.Word;
+        var idx = homoIndex;
+        simplifying = true;
+        StateHasChanged();
+        var easy = await Dict.SimplifyAsync(word, idx, cts.Token);
+        if (cts.IsCancellationRequested) return;
+        simplifying = false;
+        if (easy == null || result?.Entry is not { } cur || cur.Word != word) { StateHasChanged(); return; }
+        if (cur.Homographs is { Count: > 1 } hgs)
+        {
+            var list = hgs.ToList();
+            list[idx] = list[idx] with { EasySenses = easy };
+            cur = cur with { Homographs = list, EasySenses = idx == 0 ? easy : cur.EasySenses };
+        }
+        else cur = cur with { EasySenses = easy };
+        result = result with { Entry = cur };
+        StateHasChanged();
+    }
+
+    public void Dispose()
+    {
+        Host.Shown -= OnShown;
+        suggestCts?.Cancel();
+        toastCts?.Cancel();
+        simplifyCts?.Cancel();
+        self?.Dispose();
+    }
+}

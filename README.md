@@ -4,7 +4,7 @@
 
 - **웹 서비스 정본 주소**: [https://dic.dgedu.link](https://dic.dgedu.link)
 - **데스크탑 앱 다운로드 (Windows)**: [https://dic.dgedu.link/api/download/desktop](https://dic.dgedu.link/api/download/desktop)
-- **기술 스택**: Vite + React 19 + Tailwind CSS + Cloudflare Pages/Functions + D1(`edu-link-db`) + Tauri v2(Rust)
+- **기술 스택**: Vite + React 19 + Tailwind CSS + Cloudflare Pages/Functions + D1(`edu-link-db`) · 데스크탑은 C# .NET 10(WPF + Blazor Hybrid)
 
 ---
 
@@ -41,7 +41,8 @@
 - **전역 단축키(`Ctrl+Alt+D`)**: 수업 중 언제 어디서든 슬림한 캡슐 스팟라이트 창 호출.
 - **전체화면(F11) 모드**: 버튼 클릭 또는 `F11` 키로 모니터 화면 전체를 100% 가득 채우는 깨끗한 화이트보드 대형 사전 모드 전환.
 - **시스템 트레이 상주**: 트레이 아이콘 우클릭 메뉴에서 현재 버전 확인 및 누리집 바로가기 지원.
-- **무중단 자동 업데이트**: Minisign 암호화 디지털 서명과 Cloudflare R2(`edu-dic-downloads`)를 통한 안전하고 신속한 자동 업데이트.
+- **소수점 버전까지 자동 업데이트**: 시작할 때와 6시간마다 새 버전을 확인해, 창이 숨겨져 있을 때 조용히 바꿉니다. 내려받은 파일은 SHA-256·ECDSA 서명으로 확인합니다(Cloudflare R2 `edu-dic-downloads`).
+- **설치가 따로 없는 exe 하나**: 내려받아 실행하면 스스로 설치되고(관리자 권한 불필요), 옛 Tauri 판(0.3.0 이하)은 자동 업데이트로 새 판으로 넘어옵니다.
 
 ---
 
@@ -64,22 +65,18 @@ npm run pages:dev
 npm run deploy
 ```
 
-### 데스크탑 앱 (Tauri v2)
+### 데스크탑 앱 (C# .NET 10 · WPF + Blazor Hybrid)
 
-```bash
-# 데스크탑 프런트엔드 의존성 설치
+자세한 내용은 [desktop/README.md](desktop/README.md), 설계는 [docs/plan-desktop-dotnet.md](docs/plan-desktop-dotnet.md).
+
+```powershell
 cd desktop
-npm install
+# 빌드·시험
+D:\Setup\DevTools\dotnet\dotnet.exe build EduDic.slnx
+D:\Setup\DevTools\dotnet\dotnet.exe test tests\EduDic.Tests
 
-# 데스크탑 개발 모드 실행
-npm run tauri dev
-
-# 데스크탑 설치 프로그램(NSIS) 빌드 및 디지털 서명
-# updater.key는 빈 비밀번호로 암호화되어 있음 - PASSWORD 변수를 반드시 빈 문자열로 설정해야
-# 함(안 하면 makensis 단계에서 비대화형 세션이 비밀번호 프롬프트 대기 상태로 멈춤).
-$env:TAURI_SIGNING_PRIVATE_KEY = (Get-Content "src-tauri\updater.key" -Raw).Trim()
-$env:TAURI_SIGNING_PRIVATE_KEY_PASSWORD = ""
-npx tauri build
+# 릴리스: 패치 번호 자동 +1 → 시험 → 단일 exe → 서명 → 매니페스트 → 커밋 (-Upload 면 R2 배포까지)
+powershell -ExecutionPolicy Bypass -File tools\release.ps1 -Notes "바뀐 점" -Upload
 ```
 
 ---
@@ -109,9 +106,10 @@ edu-dic/
 │   ├── api/              # lookup, image, suggest, related, simplify, share-topic, topic-words 등
 │   ├── lib/              # krdict, encykorea, naver, ai, choseong, dictionary 등
 │   └── _middleware.ts    # 전역 CORS 및 보안 헤더 처리
-├── desktop/              # Tauri v2 Windows 데스크탑 앱
-│   ├── src/              # 스팟라이트 UI, 전체화면 화이트보드 모드, 발음 재생
-│   └── src-tauri/        # Rust 백엔드, 전역 단축키(Ctrl+Alt+D), 트레이, 업데이터
+├── desktop/              # Windows 데스크탑 앱 (C# .NET 10)
+│   ├── src/EduDic.Core/  # 사전 API·화면 규칙·업데이트 서명 검증
+│   ├── src/EduDic.App/   # 스팟라이트 창, 트레이, 전역 단축키(Ctrl+Alt+D), 설치·자동 업데이트, Blazor 화면
+│   └── tools/            # release.ps1(버전 올림~배포), EduDic.Sign(서명)
 └── docs/                 # PLAN.md, STATUS.md
 ```
 

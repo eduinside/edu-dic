@@ -1,0 +1,22 @@
+@* lucide 아이콘 (옛 앱이 쓰던 lucide-react 와 같은 도형) *@
+<svg class="i @Class" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+    @switch (N)
+    {
+        case "search": <path d="m21 21-4.34-4.34" /><circle cx="11" cy="11" r="8" /> break;
+        case "sparkles": <path d="M11.017 2.814a1 1 0 0 1 1.966 0l1.051 5.558a2 2 0 0 0 1.594 1.594l5.558 1.051a1 1 0 0 1 0 1.966l-5.558 1.051a2 2 0 0 0-1.594 1.594l-1.051 5.558a1 1 0 0 1-1.966 0l-1.051-5.558a2 2 0 0 0-1.594-1.594l-5.558-1.051a1 1 0 0 1 0-1.966l5.558-1.051a2 2 0 0 0 1.594-1.594z" /><path d="M20 2v4" /><path d="M22 4h-4" /><circle cx="4" cy="20" r="2" /> break;
+        case "x": <path d="M18 6 6 18" /><path d="m6 6 12 12" /> break;
+        case "minus": <path d="M5 12h14" /> break;
+        case "arrow-left": <path d="m12 19-7-7 7-7" /><path d="M19 12H5" /> break;
+        case "volume": <path d="M11 4.702a.705.705 0 0 0-1.203-.498L6.413 7.587A1.4 1.4 0 0 1 5.416 8H3a1 1 0 0 0-1 1v6a1 1 0 0 0 1 1h2.416a1.4 1.4 0 0 1 .997.413l3.383 3.384A.705.705 0 0 0 11 19.298z" /><path d="M16 9a5 5 0 0 1 0 6" /><path d="M19.364 18.364a9 9 0 0 0 0-12.728" /> break;
+        case "book": <path d="M12 5v16" /><path d="M20.001 19A2 2 0 0022 17V5a2 2 0 00-1.999-2L16 3.002A5 5 0 0012 5a5 5 0 00-4-2H4a2 2 0 00-2 2v12a2 2 0 001.999 2H8a5 5 0 014 2 5 5 0 014-2z" /> break;
+        case "loader": <path d="M21 12a9 9 0 1 1-6.219-8.56" /> break;
+        case "maximize": <path d="M15 3h6v6" /><path d="m21 3-7 7" /><path d="m3 21 7-7" /><path d="M9 21H3v-6" /> break;
+        case "minimize": <path d="m14 10 7-7" /><path d="M20 10h-6V4" /><path d="m3 21 7-7" /><path d="M4 14h6v6" /> break;
+        case "external": <path d="M15 3h6v6" /><path d="M10 14 21 3" /><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" /> break;
+    }
+</svg>
+
+@code {
+    [Parameter, EditorRequired] public string N { get; set; } = "";
+    [Parameter] public string? Class { get; set; }
+}

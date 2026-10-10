@@ -89,6 +89,16 @@ public static class Installer
             {
                 using var p = Process.Start(new ProcessStartInfo(exe, "/S") { UseShellExecute = false, CreateNoWindow = true });
                 p?.WaitForExit(60_000);
+                // NSIS 제거 프로그램은 임시 폴더로 자신을 복사해 다시 띄우고 바로 끝난다 — 실제 제거가 끝나야(제거 정보가 사라져야)
+                // 다음으로 간다. 안 기다리면 늦게 도는 옛 제거가 같은 이름의 새 바로가기를 지워 버린다 (2026-10-10 실기 확인)
+                var until = DateTime.UtcNow.AddSeconds(60);
+                while (DateTime.UtcNow < until)
+                {
+                    using var still = Registry.CurrentUser.OpenSubKey($@"{UninstallRoot}\{name}");
+                    if (still == null) break;
+                    Thread.Sleep(300);
+                }
+                Thread.Sleep(1000); // 마지막 파일 정리 여유
                 removed = true;
             }
             catch (Exception) { /* 제거 프로그램이 안 돌아도 새 앱 설치는 계속 */ }
@@ -149,10 +159,11 @@ public static class Installer
         foreach (var l in new[] { StartMenuLink, DesktopLink }) try { File.Delete(l); } catch (Exception) { }
         try { Registry.CurrentUser.DeleteSubKeyTree(UninstallKey, throwOnMissingSubKey: false); } catch (Exception) { }
         try { Directory.Delete(AppPaths.DataDir, recursive: true); } catch (Exception) { }
-        // 단일 exe 가 처음 실행 때 풀어 둔 파일 (%TEMP%\.net\어린이 쉬운 사전)
-        try { Directory.Delete(Path.Combine(Path.GetTempPath(), ".net", Path.GetFileNameWithoutExtension(AppPaths.ExeName)), recursive: true); } catch (Exception) { }
-        // 실행 중인 exe 는 바로 못 지운다 → 이 프로세스가 끝난 뒤 폴더째 지운다
-        Process.Start(new ProcessStartInfo("cmd.exe", $"/c ping 127.0.0.1 -n 3 > nul & rmdir /s /q \"{AppPaths.InstallDir}\"")
+        // 실행 중인 exe 와 그 exe 가 %TEMP%\.net 에 풀어 둔 DLL 은 바로 못 지운다(지우다 말면 다음 실행이 깨진다)
+        // → 이 프로세스가 끝난 뒤 둘 다 폴더째 지운다 (끝나는 데 몇 초 걸려 30초까지 다시 시도)
+        var dir = AppPaths.InstallDir;
+        var extracted = Path.Combine(Path.GetTempPath(), ".net", Path.GetFileNameWithoutExtension(AppPaths.ExeName));
+        Process.Start(new ProcessStartInfo("cmd.exe", $"/c for /l %i in (1,1,30) do (ping 127.0.0.1 -n 2 > nul & rmdir /s /q \"{dir}\" 2> nul & if not exist \"{dir}\" (rmdir /s /q \"{extracted}\" 2> nul & exit))")
         {
             UseShellExecute = false,
             CreateNoWindow = true,

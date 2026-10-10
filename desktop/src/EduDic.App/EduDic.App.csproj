@@ -31,10 +31,10 @@
   <PropertyGroup Condition="'$(Configuration)' == 'Release'">
     <PublishSingleFile>true</PublishSingleFile>
     <IncludeNativeLibrariesForSelfExtract>true</IncludeNativeLibrariesForSelfExtract>
-    <!-- 내려받는 크기(설치·자동 업데이트)를 줄이려고 압축하고(202→84MB), 처음 실행 때 %TEMP%\.net 에 한 번 풀어 쓴다.
-         압축만 하면 실행할 때마다 메모리에 풀어 사설 메모리가 237MB, 풀어 쓰면 154MB (2026-10-10 실측) -->
+    <!-- 내려받는 크기(설치·자동 업데이트)를 줄이려고 압축한다(202→80MB, 사설 메모리 154→237MB).
+         IncludeAllContentForSelfExtract(전부 %TEMP%\.net 에 풀어 쓰기)는 쓰지 않는다 — 임시 폴더 정리로 파일 일부가 사라지면
+         System.Diagnostics.Tracing 을 못 찾고 죽는 것을 0.4.1 실기에서 확인 (2026-10-10) -->
     <EnableCompressionInSingleFile>true</EnableCompressionInSingleFile>
-    <IncludeAllContentForSelfExtract>true</IncludeAllContentForSelfExtract>
     <DebugType>none</DebugType>
   </PropertyGroup>
 

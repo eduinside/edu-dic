@@ -1,10 +1,9 @@
 import { X, Search, Sparkles, EyeOff, Star, Monitor, Maximize2, Download } from "lucide-react";
 import Modal from "./Modal.tsx";
 
-// PC 앱 설치 파일. 0.6.0(공용 모듈 DesktopKit)을 R2 byeduin-media 에 올린 뒤
-// 고정 주소 "https://eduin.info/downloads/apps/edu-dic/setup" 으로 바꾼다 (docs/plan-desktop-kit.md).
-// 그 전까지는 옛 함수(/api/download/desktop)가 같은 설치 파일을 내준다.
-const DESKTOP_SETUP_URL = "/api/download/desktop";
+// PC 앱 설치 파일 — 고정 주소(0.6.0~, R2 byeduin-media apps/edu-dic/ · 공용 모듈 DesktopKit, docs/plan-desktop-kit.md).
+// 늘 최신 판 설치 파일로 넘겨 준다. 옛 /api/download/desktop 은 다리 판 동안만 남는다
+const DESKTOP_SETUP_URL = "https://eduin.info/downloads/apps/edu-dic/setup";
 
 const STEPS: { icon: typeof Search; title: string; body: string }[] = [
   {

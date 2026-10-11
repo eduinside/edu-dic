@@ -161,9 +161,9 @@ PLAN.md의 M3(초성 검색 및 실시간 자동완성, 접근성·에러 UX 다
 - 로컬 시험(EDUDIC_UPDATE_URL + 로컬 서버): 0.4.2 → 0.5.0 이전(창 없이 16초), 옛 Tauri 0.3.0 → 0.5.0(Tauri 인수 그대로, 옛 앱 제거·시작 프로그램 이어 받기), 0.5.0 → 0.5.1 변경분(app 팩 하나만 요청, 24초), 제거(설치 폴더·데이터·정션·바로가기·레지스트리 모두), 화면 정상. 오류 이벤트 0건. xUnit 36개.
 - **0.5.0 배포**(R2: 팩 3개 → 설치 프로그램 → 매니페스트). 운영 실기: 이 PC의 0.4.2가 운영 매니페스트를 보고 설치 프로그램(128KB)을 받아 바꿔 끼움 → 설치 프로그램이 운영에서 팩 77.8MB를 18초에 받아 새 배치로 이전, 바로가기·제거 정보 새 경로, 옛 exe 정리, 오류 이벤트 0건. 다음 패치부터는 app 팩(약 0.6MB)만 받는다.
 
-## 2026-10-12 — 데스크탑 공용 모듈 DesktopKit 으로 (0.6.0 다리 판 준비 · 아직 배포 전)
+## 2026-10-12 — 데스크탑 공용 모듈 DesktopKit 으로 (0.6.0 다리 판 배포됨)
 
-계획·실측: `docs/plan-desktop-kit.md`. 코드·로컬 실측까지 끝, **R2 업로드·사이트 단추 바꾸기는 남음**.
+계획·실측: `docs/plan-desktop-kit.md`. **0.6.0 을 새 저장소(eduin.info/downloads/apps/edu-dic)와 옛 저장소(edu-dic-downloads, 다리)에 올렸고 사이트 단추를 고정 주소로 바꿈** (아래 ‘배포’).
 
 - 설치·업데이트를 `LOCAL/local-desktop-kit`(kit 0.3)로: `EduDic.Core/Install.cs`·`Update.cs`·`EduDic.Setup`·앱 `Installer.cs`·`Updater.cs` 지움 → `Core/AppKit.cs`(KitApp 값) + kit `KitUpdater`·kit 설치 파일. 설치 폴더(`Programs\EduDic`)·정션 배치·서명 키 그대로
 - 매니페스트 `https://eduin.info/downloads/apps/edu-dic/latest.json`(R2 `byeduin-media`), 설치 파일 고정 주소 `…/apps/edu-dic/setup`. byeduin-labs 서빙 함수 `DESKTOP_APPS` 에 `edu-dic`
@@ -172,3 +172,5 @@ PLAN.md의 M3(초성 검색 및 실시간 자동완성, 접근성·에러 UX 다
 - 늘 떠 있는 트레이 앱이라 새 판을 받아 두면 창이 숨겨져 있을 때 `--autostart` 로 다시 시작(0.5.0 과 같은 동작)
 - 시험 22개. 로컬 실측(127.0.0.1, `EDU_DIC_INSTALL_DIR`): kit 설치 파일로 설치 → 다시 설치 때 숨은 앱을 끝내기 신호로 닫음(묻지 않음) → 0.6.1 을 **app 팩(0.6MB)만** 받아 숨은 채 다시 시작·`DisplayVersion` 갱신 → 실제 0.5.0 폴더 사본에 **옛 0.5.0 업데이터 코드(06f619d)** 로 다리 판 적용(app 팩 0.7MB만, runtime·web 은 0.5.0 과 sha 같음) → 받아들이기(install.json·설치 파일 사본·제거 정보 이동) → 0.6.1 업데이트 때 `X-Kit-Install` 머리 확인, 통계 끄면 안 보냄 → 조용히 제거(폴더·제거 정보·바로가기 지워짐). 0.4.x 설치 파일 서명·Tauri minisign 도 옛 코드로 확인
 - **남은 일 (사람 확인 뒤)**: `powershell -ExecutionPolicy Bypass -File desktop\tools\release.ps1 -Minor -Bridge -Notes "…"` → `-Upload`(새 저장소 → 옛 저장소 순) → `app/components/UsageGuide.tsx` 의 `DESKTOP_SETUP_URL` 을 `https://eduin.info/downloads/apps/edu-dic/setup` 으로 바꿔 배포. 0.6.1·0.6.2 뒤 옛 버킷·`functions/api/download/*`·`LegacyMigration`·`LegacyLayout`·`tools/EduDic.Sign`·`-Bridge` 정리
+- **배포 (2026-10-12)**: `release.ps1 -Version 0.6.0 -Bridge -Upload` (커밋 `6bd57b7`). 새 저장소: 팩 3개 + `EduDic-0.6.0-Setup.exe` + `latest.json`, `…/edu-dic/setup` → 302 설치 파일. 옛 저장소: 새 app 팩만 올림(web·runtime 은 0.5.0 것과 같아 이미 있음) + 설치 파일(kit) + `desktop-latest.json` 0.6.0. 운영 주소에서 내려받아 sha256 대조 — 설치 파일(두 주소 같은 파일)·팩 모두 일치. 옛 버킷 정리: 이제 아무도 안 쓰는 0.5.0 app 팩(`15a3fe…`) 지움. 남은 옛 객체(매니페스트·설치 파일·다리 판 팩 3개)는 늦게 켜는 0.5.0·0.4.x·Tauri 가 넘어오는 길이라 0.6.2 뒤 지움
+- 배포 중 AhnLab Safe Transaction 이 PowerShell 행위(`Execution/MDP.Powershell.M1201`)를 막았다는 알림 — `powershell -ExecutionPolicy Bypass -File release.ps1` 로 보이나 확인 안 됨. 릴리스·업로드는 모두 끝까지 됨

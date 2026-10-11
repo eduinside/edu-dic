@@ -1,6 +1,11 @@
 import { X, Search, Sparkles, EyeOff, Star, Monitor, Maximize2, Download } from "lucide-react";
 import Modal from "./Modal.tsx";
 
+// PC 앱 설치 파일. 0.6.0(공용 모듈 DesktopKit)을 R2 byeduin-media 에 올린 뒤
+// 고정 주소 "https://eduin.info/downloads/apps/edu-dic/setup" 으로 바꾼다 (docs/plan-desktop-kit.md).
+// 그 전까지는 옛 함수(/api/download/desktop)가 같은 설치 파일을 내준다.
+const DESKTOP_SETUP_URL = "/api/download/desktop";
+
 const STEPS: { icon: typeof Search; title: string; body: string }[] = [
   {
     icon: Search,
@@ -78,14 +83,29 @@ export default function UsageGuide({ open, onClose }: { open: boolean; onClose: 
           </div>
 
           <a
-            href="/api/download/desktop"
-            download="어린이 쉬운 사전 데스크탑 설치.exe"
+            href={DESKTOP_SETUP_URL}
             className="flex shrink-0 items-center gap-1.5 rounded-xl bg-brand-600 px-3 py-1.5 text-xs font-bold text-white shadow-sm hover:bg-brand-700 transition-colors"
           >
             <Download className="size-3.5" aria-hidden />
             <span>다운로드</span>
           </a>
         </div>
+
+        {/* PC 앱 이용 안내 — 사용 통계 (앱 안 글: desktop/src/EduDic.App/terms.txt) */}
+        <details className="rounded-2xl bg-paper p-3.5 text-[13px] leading-normal text-ink-soft">
+          <summary className="cursor-pointer text-sm font-extrabold text-ink">PC 앱 이용 안내 (사용 통계)</summary>
+          <ul className="mt-2 list-disc space-y-1 pl-5">
+            <li>로그인 없이 써요. 이름·학교·찾은 낱말 기록을 보내지 않아요.</li>
+            <li>
+              새 판을 확인할 때(켜고 1분 뒤, 6시간마다) 몇 명이 쓰는지 세려고 <b>설치 번호</b>(설치할 때 아무렇게나 만든 번호)와
+              <b> 판</b>만 함께 보내요.
+            </li>
+            <li>서버에는 번호를 알아볼 수 없게 바꾼 값과 날짜·판만 남겨요. 인터넷 주소(IP)는 남기지 않고, 90일이 지나면 날짜별 사용자 수만 남겨요.</li>
+            <li>
+              <b>끄는 법</b>: 트레이의 사전 아이콘을 오른쪽 클릭 → ‘사용 통계 보내기’를 누르면 꺼져요. 꺼도 사전과 업데이트는 그대로 돼요.
+            </li>
+          </ul>
+        </details>
       </div>
     </Modal>
   );

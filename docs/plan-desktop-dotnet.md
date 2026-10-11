@@ -104,3 +104,5 @@ desktop/
 - **옮기는 길(다리 판)**: 옛 `desktop-latest.json` 을 한 판 더 내되 그 판의 앱이 kit `KitUpdater`(새 매니페스트 주소)를 쓰게. 옛 버킷·매니페스트·`functions/api/download/*` 는 두 판 동안 둔 뒤 비운다. 옛 Tauri(0.3.0 이하)·0.4.x 경로는 그 다리 판까지만 지원.
 - 서명 키: 지금 키(`DESKTOP_UPDATER_ECDSA_KEY`)를 그대로 쓴다(공개키만 kit `KitApp.PublicKey` 로).
 - 순서: G노트 0.9.x 가 실제로 두 번 이상 업데이트된 뒤 (local-law 검토 문서 §12.8). 붙이는 법: `LOCAL/local-desktop-kit/docs/integrate.md`.
+
+실행 계획·결과: [plan-desktop-kit.md](plan-desktop-kit.md) (0.6.0 다리 판).

@@ -1,0 +1,9 @@
+{
+  "//": "설치판 팩 나누기 (LOCAL/local-desktop-kit docs/spec.md §3) — 위에서부터 처음 맞는 규칙. 0.5.0 의 app·web·runtime 과 같은 나누기라 안 바뀐 팩은 다시 받지 않는다",
+  "packs": [
+    { "name": "app", "match": ["어린이 쉬운 사전.*", "EduDic.*", "DesktopKit.*", "EduDic-Setup.exe"] },
+    { "name": "web", "match": ["Microsoft.AspNetCore.*", "Microsoft.Extensions.*", "Microsoft.JSInterop*", "Microsoft.Web.WebView2.*", "WebView2Loader*"] },
+    { "name": "runtime", "match": ["**"] }
+  ],
+  "skip": ["*.pdb", "*.staticwebassets.endpoints.json", "wwwroot/**", "packs.txt", "*.xml"]
+}

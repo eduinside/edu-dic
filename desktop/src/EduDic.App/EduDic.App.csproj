@@ -29,14 +29,15 @@
   </ItemGroup>
 
   <PropertyGroup Condition="'$(Configuration)' == 'Release'">
-    <!-- 0.5.0부터 폴더 게시: 파일을 팩(app·web·runtime)으로 나눠 바뀐 팩만 업데이트한다 (docs/plan-desktop-dotnet.md §7).
-         0.4.x 의 단일 exe(압축 80MB)는 패치마다 전체를 받아야 했다 -->
+    <!-- 폴더 게시: 파일을 팩(app·web·runtime — tools/packs.json)으로 나눠 바뀐 팩만 업데이트한다 (0.5.0~, 0.6.0 부터 공용 모듈 DesktopKit) -->
     <DebugType>none</DebugType>
     <GenerateDocumentationFile>false</GenerateDocumentationFile>
   </PropertyGroup>
 
   <ItemGroup>
     <EmbeddedResource Include="wwwroot\**" />
+    <!-- 이용 안내 (트레이 메뉴 › 이용 안내) — 사용 통계를 무엇을·왜·얼마나·끄는 법 -->
+    <EmbeddedResource Include="terms.txt" LogicalName="terms.txt" />
     <EmbeddedResource Include="$(PkgMicrosoft_AspNetCore_Components_WebView)\staticwebassets\blazor.webview.js" LogicalName="framework/blazor.webview.js" />
     <Resource Include="app.ico" />
   </ItemGroup>

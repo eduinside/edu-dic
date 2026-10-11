@@ -1,5 +1,9 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
-    <TargetFramework>net10.0</TargetFramework>
+    <!-- 설치·업데이트는 공용 모듈 DesktopKit (LOCAL/local-desktop-kit, 0.6.0~ — docs/plan-desktop-kit.md) -->
+    <TargetFramework>net10.0-windows</TargetFramework>
   </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\..\..\..\..\LOCAL\local-desktop-kit\src\DesktopKit.Install\DesktopKit.Install.csproj" />
+  </ItemGroup>
 </Project>

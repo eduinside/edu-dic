@@ -1,21 +1,33 @@
-﻿# 어린이 쉬운 사전 데스크탑 릴리스 — 버전 올리기부터 배포까지 한 번에 (docs/plan-desktop-dotnet.md §4, §7)
-# 사용: powershell -ExecutionPolicy Bypass -File tools\release.ps1 -Notes "바뀐 점" [-Minor|-Major|-Version x.y.z] [-Upload] [-NoCommit]
-#   기본은 패치 번호 +1 (0.5.0 → 0.5.1). -Upload 를 붙여야 실제로 배포된다(R2) — 설치된 앱은 6시간 안에 바뀐 팩만 받아 스스로 바뀐다.
-#   만드는 것(release\): 어린이 쉬운 사전 설치.exe · packs\<sha256>.zip · desktop-latest.json · app\(게시 폴더)
-#   시험용: -Out <폴더> -PackBase http://127.0.0.1:포트/packs/ -NoCommit → 로컬 서버로 설치·업데이트를 먼저 확인 (EDUDIC_UPDATE_URL)
+﻿# 어린이 쉬운 사전 데스크탑 릴리스 (0.6.0~ 공용 모듈 LOCAL/local-desktop-kit — docs/plan-desktop-kit.md, kit docs/spec.md·integrate.md)
+# 사용: powershell -ExecutionPolicy Bypass -File tools\release.ps1 -Notes "바뀐 점|둘째 줄" [-Minor|-Major|-Version x.y.z] [-Bridge] [-Upload] [-NoCommit]
+#   기본은 패치 번호 +1 (Directory.Build.props). 만드는 것(release\):
+#     app\      게시 폴더 (.NET 포함, 단일 파일 아님)
+#     upload\   새 저장소(R2 byeduin-media apps/edu-dic/)에 올릴 것 — pack-<sha>.zip · EduDic-<판>-Setup.exe · latest.json(서명)
+#     legacy\   -Bridge 일 때만: 옛 저장소(R2 edu-dic-downloads)용 desktop-latest.json (0.5.0·0.4.x·Tauri 가 읽는 형식, 같은 팩·설치 파일)
+#   -Bridge: 다리 판(0.6.0). 앱 팩에 설치 파일 사본을 싣고(0.5.0 이 팩으로 넘어올 때 쓴다) 옛 매니페스트도 만든다.
+#            옛 저장소는 다리 판에 머문다 — 다음 판부터는 -Bridge 없이.
+#   시험: -BaseUrl http://127.0.0.1:<포트>/ -Out <폴더> -NoCommit → upload 를 로컬 서버로 열고 설치 파일 실행
+#         (앱 업데이트 확인은 EDU_DIC_UPDATE_URL, 설치 위치는 EDU_DIC_INSTALL_DIR 로 바꿀 수 있다)
+#   -Upload: 새 저장소에 팩 → 설치 파일 → latest.json, -Bridge 면 이어서 옛 저장소에 팩 → 설치 파일 → desktop-latest.json (각각 매니페스트가 마지막).
+#            사람이 결과를 확인한 뒤에만. byeduin-labs 서빙 함수 DESKTOP_APPS 에 edu-dic 이 배포돼 있어야 한다.
 param(
     [string]$Notes = '',
     [switch]$Minor,
     [switch]$Major,
     [string]$Version,
+    [string]$BaseUrl = 'https://eduin.info/downloads/apps/edu-dic/',
+    [string]$Out,
+    [switch]$Bridge,
     [switch]$Upload,
     [switch]$NoCommit,
-    [string]$Out,
-    [string]$PackBase = 'https://dic.dgedu.link/api/download/pack/'
+    [switch]$NoTest
 )
 $ErrorActionPreference = 'Stop'
 $desk = Split-Path -Parent $PSScriptRoot          # desktop\
 $repo = Split-Path -Parent $desk                  # dgedu-dic\
+$proj = Split-Path -Parent (Split-Path -Parent $repo) # D:\Proj
+$kit = Join-Path $proj 'LOCAL\local-desktop-kit'
+$site = Join-Path $proj 'EDUIN-INFO\byeduin-labs'
 $dotnet = 'D:\Setup\DevTools\dotnet\dotnet.exe'
 if (-not (Test-Path $dotnet)) { $dotnet = 'dotnet' }
 $git = 'D:\Setup\DevTools\Git\bin\git.exe'
@@ -24,10 +36,13 @@ $props = Join-Path $desk 'Directory.Build.props'
 $devVars = Join-Path $repo '.dev.vars'
 $tauriKey = Join-Path $desk 'src-tauri\updater.key'
 if (-not $Out) { $Out = Join-Path $desk 'release' }
-$setupName = '어린이 쉬운 사전 설치.exe'
-$downloadUrl = 'https://dic.dgedu.link/api/download/desktop'
+if (-not $BaseUrl.EndsWith('/')) { $BaseUrl += '/' }
+$prodBase = 'https://eduin.info/downloads/apps/edu-dic/'
+$legacyPackBase = 'https://dic.dgedu.link/api/download/pack/'
+$legacySetupUrl = 'https://dic.dgedu.link/api/download/desktop'
 $utf8 = New-Object System.Text.UTF8Encoding $false
-if ($Upload -and $PackBase -notlike 'https://dic.dgedu.link/*') { throw '-Upload 는 운영 팩 주소(-PackBase 기본값)로만 할 수 있어요.' }
+if ($Upload -and $BaseUrl -ne $prodBase) { throw '-Upload 는 운영 주소(-BaseUrl 기본값)로만 할 수 있어요.' }
+if (-not (Test-Path (Join-Path $kit 'src\DesktopKit.Setup'))) { throw "공용 모듈을 찾지 못했어요: $kit" }
 
 function Run([string]$what, [scriptblock]$cmd) {
     Write-Host "▶ $what"
@@ -35,7 +50,13 @@ function Run([string]$what, [scriptblock]$cmd) {
     if ($LASTEXITCODE -ne 0) { throw "$what 실패 (exit $LASTEXITCODE)" }
 }
 
-# 1) 버전
+# 앱에 넣은 값 (Core/AppKit.cs) — 릴리스 도구가 이 공개키로 서명을 다시 확인한다
+$appKit = [IO.File]::ReadAllText((Join-Path $desk 'src\EduDic.Core\AppKit.cs'))
+$pubkey = [regex]::Match($appKit, 'PublicKey = "([^"]+)"').Groups[1].Value
+$quitEvent = [regex]::Match($appKit, 'QuitEvent = "([^"]+)"').Groups[1].Value.Replace('\\', '\')
+if (-not $pubkey -or -not $quitEvent) { throw 'AppKit.cs 에서 공개키·끝내기 신호를 찾지 못했어요.' }
+
+# 1) 판
 $text = [IO.File]::ReadAllText($props)
 $cur = [regex]::Match($text, '<Version>(\d+)\.(\d+)\.(\d+)</Version>')
 if (-not $cur.Success) { throw 'Directory.Build.props 에서 <Version> 을 찾지 못했어요.' }
@@ -44,113 +65,125 @@ if ($Version) { $next = $Version }
 elseif ($Major) { $next = "$($ma + 1).0.0" }
 elseif ($Minor) { $next = "$ma.$($mi + 1).0" }
 else { $next = "$ma.$mi.$($pa + 1)" }
-if ($next -notmatch '^\d+\.\d+\.\d+$') { throw "버전 형식이 틀려요: $next" }
-Write-Host "버전 $ma.$mi.$pa → $next"
+if ($next -notmatch '^\d+\.\d+\.\d+$') { throw "판 형식이 틀려요: $next" }
+Write-Host "판 $ma.$mi.$pa → $next  ($Out)"
 [IO.File]::WriteAllText($props, ($text -replace '<Version>[^<]+</Version>', "<Version>$next</Version>"), $utf8)
+if (-not $Notes) { $Notes = "$next 판" }
+$setupName = "EduDic-$next-Setup"
 
 try {
-    # 2) 시험 → 앱 폴더 게시 → 설치 프로그램
-    Run '시험' { & $dotnet test (Join-Path $desk 'tests\EduDic.Tests') --nologo -v q }
+    # 2) 시험 → 앱 폴더 게시
+    if (-not $NoTest) { Run '시험' { & $dotnet test (Join-Path $desk 'tests\EduDic.Tests') --nologo -v q } }
     if (Test-Path $Out) { Remove-Item $Out -Recurse -Force }
-    $appOut = Join-Path $Out 'app'
-    Run '앱 게시(폴더)' { & $dotnet publish (Join-Path $desk 'src\EduDic.App') -c Release -o $appOut --nologo -v q }
-    $setupOut = Join-Path $Out '_setup'
-    Run '설치 프로그램 빌드' { & $dotnet publish (Join-Path $desk 'src\EduDic.Setup') -c Release -o $setupOut --nologo -v q }
-    $setup = Join-Path $Out $setupName
-    Move-Item (Join-Path $setupOut $setupName) $setup
-    Remove-Item $setupOut -Recurse -Force
+    $app = Join-Path $Out 'app'
+    Run '앱 게시 (폴더, .NET 포함)' { & $dotnet publish (Join-Path $desk 'src\EduDic.App') -c Release -r win-x64 --self-contained true -p:PublishSingleFile=false -o $app --nologo -v q }
 
-    # 3) 팩(app·web·runtime) + 팩 목록 서명
-    Run '서명 도구 빌드' { & $dotnet build (Join-Path $desk 'tools\EduDic.Sign') -c Release --nologo -v q }
-    $signDll = Join-Path $desk 'tools\EduDic.Sign\bin\Release\net10.0\EduDic.Sign.dll'
-    Write-Host '▶ 팩 만들기'
-    $packsJson = & $dotnet $signDll packs $devVars $appOut (Join-Path $Out 'packs') $next $PackBase
-    if ($LASTEXITCODE -ne 0) { throw '팩 만들기·서명 실패 (.dev.vars 의 DESKTOP_UPDATER_ECDSA_KEY 확인)' }
-    $packs = $packsJson | ConvertFrom-Json
+    # 3) 설치 파일 (kit DesktopKit.Setup, net48)
+    $setupDir = Join-Path $Out '_setup'
+    Run '설치 파일 빌드 (net48)' {
+        & $dotnet publish (Join-Path $kit 'src\DesktopKit.Setup') -c Release -o $setupDir --nologo -v q `
+            "-p:AssemblyName=$setupName" '-p:KitId=edu-dic' '-p:KitName=어린이 쉬운 사전 데스크탑' '-p:KitExe=어린이 쉬운 사전.exe' '-p:KitInstallDir=EduDic' `
+            "-p:KitManifestUrl=$($BaseUrl)latest.json" "-p:KitPublicKey=$pubkey" '-p:KitSetupName=EduDic-Setup' `
+            "-p:KitIcon=$(Join-Path $desk 'src\EduDic.App\app.ico')" '-p:KitPublisher=dic.dgedu.link' '-p:KitUrl=https://dic.dgedu.link' `
+            '-p:KitNeedsWebView2=true' "-p:KitQuitEvent=$quitEvent" `
+            '-p:KitDataNote=사전 설정과 화면 임시 파일(AppData\Local\EduDic)은 남겨 둬요. 필요 없으면 그 폴더를 지워도 돼요.'
+    }
+    $setup = Join-Path $setupDir "$setupName.exe"
+    # 다리 판: 0.5.0 은 팩으로만 넘어와 설치 파일 사본이 없다 → 앱 팩에 실어 앱(LegacyMigration)이 설치 폴더에 놓게
+    if ($Bridge) { Copy-Item $setup (Join-Path $app 'EduDic-Setup.exe') }
 
-    # 4) 설치 프로그램 서명 — 0.4.x 앱(sha256·ecdsa)과 옛 Tauri 앱(minisign)이 이 파일을 받아 실행한다
-    $sigJson = & $dotnet $signDll sign $devVars $setup $next
-    if ($LASTEXITCODE -ne 0) { throw '설치 프로그램 서명 실패' }
-    $sig = $sigJson | ConvertFrom-Json
-    $minisign = ''
-    if (Test-Path $tauriKey) {
-        $tools = Join-Path $desk 'tools'
-        if (-not (Test-Path (Join-Path $tools 'node_modules\@tauri-apps\cli'))) { Push-Location $tools; npm install --no-audit --no-fund; Pop-Location }
-        Run 'minisign 서명' { node (Join-Path $tools 'node_modules\@tauri-apps\cli\tauri.js') signer sign -f $tauriKey '--password=' $setup | Out-Null }
-        $minisign = ([IO.File]::ReadAllText("$setup.sig")).Trim()
-        Remove-Item "$setup.sig"
-    } else {
-        Write-Warning "옛 Tauri 서명 키($tauriKey)가 없어 옛 0.3.0 앱은 이 버전을 받지 못해요."
+    # 4) 팩 · latest.json · 서명 (kit 릴리스 도구)
+    $upDir = Join-Path $Out 'upload'
+    Run '팩 · latest.json · 서명' {
+        & $dotnet run --project (Join-Path $kit 'src\DesktopKit.Release') -c Release -- build `
+            --publish $app --rules (Join-Path $PSScriptRoot 'packs.json') --out $upDir --id edu-dic --name '어린이 쉬운 사전 데스크탑' --version $next `
+            --setup $setup --setup-file "$setupName.exe" --env $devVars --key DESKTOP_UPDATER_ECDSA_KEY --pubkey $pubkey --notes $Notes
     }
 
-    # 5) 매니페스트 (옛 Tauri 앱 · 0.4.x 앱 · 0.5+ 앱이 함께 읽는다)
-    if (-not $Notes) { $Notes = "$next 버전" }
-    $manifest = [ordered]@{
-        version    = $next
-        notes      = $Notes
-        pub_date   = (Get-Date).ToUniversalTime().ToString('yyyy-MM-ddTHH:mm:ssZ')
-        platforms  = [ordered]@{ 'windows-x86_64' = [ordered]@{ signature = $minisign; url = $downloadUrl } }
-        sha256     = $sig.sha256
-        ecdsa      = $sig.ecdsa
-        packs      = @($packs.packs)
-        packsEcdsa = $packs.packsEcdsa
+    # 5) 다리 판: 옛 매니페스트 (같은 팩·같은 설치 파일, 옛 서명 형식)
+    if ($Bridge) {
+        $legacy = Join-Path $Out 'legacy'
+        New-Item -ItemType Directory -Force $legacy | Out-Null
+        $minisign = ''
+        if (Test-Path $tauriKey) {
+            $tools = $PSScriptRoot
+            if (-not (Test-Path (Join-Path $tools 'node_modules\@tauri-apps\cli'))) { Push-Location $tools; npm install --no-audit --no-fund; Pop-Location }
+            $sigTmp = Join-Path $legacy 'setup.exe'
+            Copy-Item $setup $sigTmp
+            Run 'minisign 서명 (옛 Tauri 앱용)' { node (Join-Path $tools 'node_modules\@tauri-apps\cli\tauri.js') signer sign -f $tauriKey '--password=' $sigTmp | Out-Null }
+            $minisign = ([IO.File]::ReadAllText("$sigTmp.sig")).Trim()
+            Remove-Item $sigTmp, "$sigTmp.sig"
+        } else {
+            Write-Warning "옛 Tauri 서명 키($tauriKey)가 없어 옛 0.3.0 앱은 이 판을 받지 못해요."
+        }
+        Run '옛 매니페스트 (desktop-latest.json)' {
+            & $dotnet run --project (Join-Path $PSScriptRoot 'EduDic.Sign') -c Release -- legacy $devVars (Join-Path $upDir 'latest.json') $setup `
+                (Join-Path $legacy 'desktop-latest.json') $legacyPackBase $legacySetupUrl $minisign
+        }
     }
-    $manifestPath = Join-Path $Out 'desktop-latest.json'
-    [IO.File]::WriteAllText($manifestPath, ($manifest | ConvertTo-Json -Depth 6), $utf8)
+    Remove-Item $setupDir -Recurse -Force
 
     # 6) 바뀐 점 기록
     if (-not $NoCommit) {
         $changelog = Join-Path $desk 'CHANGELOG.md'
-        $log = if (Test-Path $changelog) { [IO.File]::ReadAllText($changelog) } else { "# 어린이 쉬운 사전 데스크탑 바뀐 점`n" }
-        $entry = "## $next — $(Get-Date -Format 'yyyy-MM-dd')`n`n- $Notes`n"
+        $log = [IO.File]::ReadAllText($changelog)
+        $lines = ($Notes -split '\|' | Where-Object { $_.Trim() } | ForEach-Object { "- $($_.Trim())" }) -join "`n"
+        $entry = "## $next — $(Get-Date -Format 'yyyy-MM-dd')`n`n$lines`n"
         $idx = $log.IndexOf("`n## ")
         $log = if ($idx -ge 0) { $log.Substring(0, $idx + 1) + "`n" + $entry + $log.Substring($idx + 1) } else { $log.TrimEnd() + "`n`n" + $entry }
         [IO.File]::WriteAllText($changelog, $log, $utf8)
     }
 } catch {
-    # 실패하면 버전 번호를 되돌린다
+    # 실패하면 판 번호를 되돌린다
     [IO.File]::WriteAllText($props, $text, $utf8)
     throw
 }
+Get-ChildItem $upDir | ForEach-Object { '{0,-80} {1,10:N1} MB' -f $_.Name, ($_.Length / 1MB) } | Write-Host
 
-$sizes = ($packs.packs | ForEach-Object { '{0} {1:N1}MB' -f $_.name, ($_.size / 1MB) }) -join ' · '
-Write-Host ("완료: 설치 프로그램 {0:N0} KB · 팩 {1}" -f ((Get-Item $setup).Length / 1KB), $sizes)
-
-# 7) 커밋
+# 7) 커밋 (작성자는 워크스페이스 규칙대로)
 if (-not $NoCommit) {
     & $git -C $repo add -- 'desktop/Directory.Build.props' 'desktop/CHANGELOG.md'
-    # git 사용자 설정이 없는 PC면 마지막 커밋의 작성자를 그대로 쓴다
-    $who = @()
-    if (-not (& $git -C $repo config user.email)) {
-        $a = (& $git -C $repo log -1 --format='%an|%ae').Split('|')
-        $who = @('-c', "user.name=$($a[0])", '-c', "user.email=$($a[1])")
-    }
-    & $git -C $repo @who commit -m "chore(desktop): $next 릴리스 — $Notes" | Out-Null
+    & $git -C $repo -c user.name=eduinside -c user.email=parkjh85@gmail.com commit -m "chore(desktop): $next 릴리스 — $(($Notes -split '\|')[0])" | Out-Null
     if ($LASTEXITCODE -ne 0) { throw '커밋 실패' }
     Write-Host "커밋: chore(desktop): $next 릴리스"
 }
 
-# 8) 배포 (R2): 팩 → 설치 프로그램 → 매니페스트 순서 (매니페스트가 마지막이어야 앱이 없는 팩을 찾지 않는다)
+# 8) 올리기 (R2) — 각 저장소에서 팩 → 설치 파일 → 매니페스트 순서 (매니페스트가 마지막이어야 앱이 없는 팩을 찾지 않는다)
 if ($Upload) {
-    $wrangler = Join-Path $repo 'node_modules\.bin\wrangler.cmd'
-    if (-not (Test-Path $wrangler)) { throw 'wrangler 가 없어요 (dgedu-dic 에서 npm install).' }
+    if (-not (Test-Path (Join-Path $site 'wrangler.toml'))) { throw "byeduin-labs 를 찾지 못했어요: $site" }
     function Status([string]$url) {
         try { (Invoke-WebRequest -Uri $url -Method Head -UseBasicParsing -TimeoutSec 30).StatusCode }
         catch { if ($_.Exception.Response) { [int]$_.Exception.Response.StatusCode } else { 0 } }
     }
-    # 팩을 내려 주는 서버 함수(functions/api/download/pack)가 먼저 배포돼 있어야 한다 — 없는 팩이면 404 가 와야 정상
-    if ((Status ($PackBase + ('0' * 64))) -ne 404) { throw '팩 서버 함수가 아직 배포되지 않았어요 (git push 후 Pages 배포를 기다린 뒤 다시).' }
-    Push-Location $repo
+    $m = Get-Content (Join-Path $upDir 'latest.json') -Raw -Encoding UTF8 | ConvertFrom-Json
+    Push-Location $site
     try {
-        foreach ($p in $packs.packs) {
-            if ((Status $p.url) -eq 200) { Write-Host "  팩 $($p.name) 이미 있음 — 건너뜀"; continue }
-            Run "R2 팩 올리기 ($($p.name))" { & $wrangler r2 object put "edu-dic-downloads/desktop-packs/$($p.sha256).zip" --file (Join-Path $Out "packs\$($p.sha256).zip") --content-type 'application/zip' --remote }
-            if ((Status $p.url) -ne 200) { throw "올린 팩을 내려받을 수 없어요: $($p.url)" }
+        foreach ($p in $m.packs) {
+            if ((Status ($BaseUrl + $p.file)) -eq 200) { Write-Host "  팩 $($p.name) 이미 있음 — 건너뜀"; continue }
+            Run "R2 팩 올리기 ($($p.name))" { npx wrangler r2 object put "byeduin-media/apps/edu-dic/$($p.file)" --file (Join-Path $upDir $p.file) --content-type 'application/zip' --remote }
         }
-        Run 'R2 설치 프로그램 올리기' { & $wrangler r2 object put 'edu-dic-downloads/edu-dic-desktop-setup.exe' --file $setup --content-type 'application/x-msdownload' --remote }
-        Run 'R2 매니페스트 올리기' { & $wrangler r2 object put 'edu-dic-downloads/desktop-latest.json' --file $manifestPath --content-type 'application/json' --remote }
+        Run 'R2 설치 파일 올리기' { npx wrangler r2 object put "byeduin-media/apps/edu-dic/$setupName.exe" --file (Join-Path $upDir "$setupName.exe") --content-type 'application/vnd.microsoft.portable-executable' --remote }
+        Run 'R2 latest.json 올리기 (마지막)' { npx wrangler r2 object put 'byeduin-media/apps/edu-dic/latest.json' --file (Join-Path $upDir 'latest.json') --content-type 'application/json' --remote }
     } finally { Pop-Location }
-    Write-Host "배포했어요. 확인: curl -s https://dic.dgedu.link/api/download/desktop-latest.json"
+    if ((Status ($BaseUrl + 'latest.json')) -ne 200) { throw "새 매니페스트를 받을 수 없어요 — 서빙 함수 DESKTOP_APPS 에 edu-dic 이 배포됐는지 확인: $($BaseUrl)latest.json" }
+    Write-Host "새 저장소에 올렸어요: $($BaseUrl)latest.json"
+
+    if ($Bridge) {
+        $wrangler = Join-Path $repo 'node_modules\.bin\wrangler.cmd'
+        if (-not (Test-Path $wrangler)) { throw 'wrangler 가 없어요 (dgedu-dic 에서 npm install).' }
+        Push-Location $repo
+        try {
+            foreach ($p in $m.packs) {
+                $url = $legacyPackBase + $p.sha256
+                if ((Status $url) -eq 200) { Write-Host "  옛 팩 $($p.name) 이미 있음 — 건너뜀"; continue }
+                Run "옛 R2 팩 올리기 ($($p.name))" { & $wrangler r2 object put "edu-dic-downloads/desktop-packs/$($p.sha256).zip" --file (Join-Path $upDir $p.file) --content-type 'application/zip' --remote }
+                if ((Status $url) -ne 200) { throw "올린 팩을 내려받을 수 없어요: $url" }
+            }
+            Run '옛 R2 설치 파일 올리기' { & $wrangler r2 object put 'edu-dic-downloads/edu-dic-desktop-setup.exe' --file (Join-Path $upDir "$setupName.exe") --content-type 'application/x-msdownload' --remote }
+            Run '옛 R2 매니페스트 올리기 (마지막)' { & $wrangler r2 object put 'edu-dic-downloads/desktop-latest.json' --file (Join-Path $Out 'legacy\desktop-latest.json') --content-type 'application/json' --remote }
+        } finally { Pop-Location }
+        Write-Host '옛 저장소에도 올렸어요: https://dic.dgedu.link/api/download/desktop-latest.json'
+    }
 } else {
-    Write-Host '아직 배포하지 않았어요. 배포하려면 -Upload.'
+    Write-Host '아직 올리지 않았어요. 확인한 뒤 -Upload.'
 }

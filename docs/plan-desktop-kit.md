@@ -84,3 +84,13 @@ plan-desktop-dotnet.md §8 의 실행 계획. 붙이는 법은 `LOCAL/local-desk
 ## 8. 결과 (2026-10-12)
 
 코드·로컬 실측 끝 — 무엇을 어떻게 확인했는지는 [STATUS.md](STATUS.md) 2026-10-12. 2026-10-12 0.6.0 배포(새·옛 저장소), 사이트 단추를 고정 주소로. 옛 저장소는 다리 판 객체만 남김(0.5.0 app 팩 지움) — 0.6.2 뒤 비운다.
+
+## 9. 옛 저장소 비우기 — 0.6.2 를 낸 뒤 (2026-10-12 결정)
+
+0.6.1·0.6.2 는 `-Bridge` 없이 낸다(옛 매니페스트는 0.6.0 에 머문다). **0.6.2 를 올린 뒤** 한 번에:
+
+1. R2 `edu-dic-downloads` 객체 지우기 (dgedu-dic 의 wrangler, `--remote`): `desktop-latest.json` · `edu-dic-desktop-setup.exe` · `desktop-packs/8c477dfd…zip`(app) · `desktop-packs/b62ca5a5…zip`(web) · `desktop-packs/954864e8…zip`(runtime). 비면 버킷도 지울지 정한다
+2. `functions/api/download/*`·`functions/download/*`(옛 매니페스트·설치 파일·팩 함수)와 `wrangler.jsonc` 의 `DOWNLOADS` 바인딩 지우기 → 푸시(사이트 배포)
+3. 다리 판 코드 지우기: `desktop/src/EduDic.App/LegacyMigration.cs`(App.xaml.cs 호출 포함) · `desktop/src/EduDic.Core/LegacyLayout.cs` · `desktop/tools/EduDic.Sign`(slnx·시험 참조·`KitTests` 의 옛 매니페스트 시험) · `release.ps1` 의 `-Bridge` · `tools/package.json`(Tauri CLI) · 앱 `--uninstall` 넘기기
+4. 그 판(0.6.3)부터 아직 0.5.0 이하인 PC 는 자동으로 못 넘어온다 → dic.dgedu.link 에서 설치 파일을 다시 받으면 된다(설치 폴더가 같아 그대로 덮어씀)
+5. STATUS·desktop README·kit README/integrate.md §5 를 고친다

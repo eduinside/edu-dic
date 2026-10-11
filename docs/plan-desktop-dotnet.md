@@ -94,3 +94,13 @@ desktop/
   - 0.4.x: 자기 exe 자리에 설치 프로그램을 넣고 `--wait-pid N --autostart`로 띄움 → 창 없이 설치 → 새 배치로 옮겨지고 옛 exe는 앱이 지움.
 - 서버 함수가 먼저 배포돼야 매니페스트를 올린다(안 그러면 팩을 못 받음) — release.ps1이 팩 주소를 확인한 뒤 올림.
 - 시험용 `EDUDIC_UPDATE_URL`(매니페스트 주소 바꾸기)로 로컬 서버에서 설치·변경분 업데이트를 먼저 확인.
+
+## 8. 공용 모듈 DesktopKit 으로 옮기기 (계획, 2026-10-11 결정)
+
+이 앱의 설치·변경분 업데이트(§7)를 일반화한 공용 모듈이 `LOCAL/local-desktop-kit`(DesktopKit) 으로 나왔다 — 첫 사용처는 G노트 0.9.0. 데스크톱 앱은 모두 그 모듈과 **하나의 R2** 로 모은다.
+
+- **저장소**: `edu-dic-downloads` 대신 R2 `byeduin-media` 의 `apps/edu-dic/` (eduin.info 서빙 함수 `byeduin-labs/functions/downloads/apps/[[path]].js`). **dic.dgedu.link 내려받기 페이지는 단추만** — `https://eduin.info/downloads/apps/edu-dic/setup` 으로.
+- **형식**: 매니페스트 `latest.json`(kit 1 — 팩 파일 이름 `pack-<sha>.zip`, 서명 글에 id·설치 파일 포함), 설치 파일은 kit `DesktopKit.Setup`(net48, 앱 값은 빌드 속성). 설치 폴더 `Programs\EduDic`·`versions\<판>`+`app` 정션은 지금과 같아 옮길 파일이 없다.
+- **옮기는 길(다리 판)**: 옛 `desktop-latest.json` 을 한 판 더 내되 그 판의 앱이 kit `KitUpdater`(새 매니페스트 주소)를 쓰게. 옛 버킷·매니페스트·`functions/api/download/*` 는 두 판 동안 둔 뒤 비운다. 옛 Tauri(0.3.0 이하)·0.4.x 경로는 그 다리 판까지만 지원.
+- 서명 키: 지금 키(`DESKTOP_UPDATER_ECDSA_KEY`)를 그대로 쓴다(공개키만 kit `KitApp.PublicKey` 로).
+- 순서: G노트 0.9.x 가 실제로 두 번 이상 업데이트된 뒤 (local-law 검토 문서 §12.8). 붙이는 법: `LOCAL/local-desktop-kit/docs/integrate.md`.

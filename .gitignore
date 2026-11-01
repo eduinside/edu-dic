@@ -11,3 +11,6 @@ dist/
 .DS_Store
 .vscode/
 .idea/
+
+# 스크립트 결과
+scripts/.sunwoori-warm-failed.tsv

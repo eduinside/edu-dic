@@ -17,10 +17,19 @@ import { fileURLToPath } from "node:url";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const OUT = path.join(ROOT, "app/data/sunwoori.json");
-const OUT_LATEST = path.join(ROOT, "app/data/sunwoori-latest.json");
+// 첫 화면 '오늘의 순우리말' 후보 — 낱말만 담은 작은 배열(첫 화면 묶음에 들어간다). 그림·소리·쉬운 뜻이 있는
+// 기초사전 수록 낱말만 쓰고, 날마다 이웃 낱말이 이어 나오지 않게 낱말 해시 차례로 섞어 둔다.
+const OUT_DAILY = path.join(ROOT, "app/data/sunwoori-daily.json");
 const LIST_URL = "https://www.cbec.go.kr/hangeul/sub.php?menukey=223";
 const UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0 Safari/537.36 edu-dic/1.0";
 const RECHECK = process.argv.includes("--recheck");
+
+// FNV-1a 32비트 — 섞는 차례를 실행마다 같게 하려고(Math.random 대신).
+function fnv(str) {
+  let h = 0x811c9dc5;
+  for (const ch of str) h = Math.imul(h ^ ch.codePointAt(0), 0x01000193) >>> 0;
+  return h;
+}
 
 function readVars() {
   try {
@@ -232,7 +241,9 @@ async function main() {
   };
   fs.mkdirSync(path.dirname(OUT), { recursive: true });
   fs.writeFileSync(OUT, JSON.stringify(data, null, 0).replace(/\},\{/g, "},\n{") + "\n");
-  fs.writeFileSync(OUT_LATEST, JSON.stringify(out[0] ?? null) + "\n");
+  const krWords = out.filter((x) => x.kr === true);
+  const daily = (krWords.length ? krWords : out).map((x) => x.w).sort((a, b) => fnv(a) - fnv(b) || a.localeCompare(b, "ko"));
+  fs.writeFileSync(OUT_DAILY, JSON.stringify(daily) + "\n");
   const krKnown = out.filter((x) => x.kr !== null).length;
   console.log(
     `완료: ${out.length}개 저장, ${missing.length}개 뺌, 기초사전 수록 ${out.filter((x) => x.kr).length}개(확인 ${krKnown}개)`,

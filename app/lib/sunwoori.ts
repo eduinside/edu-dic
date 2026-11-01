@@ -1,7 +1,7 @@
 // 순우리말 배움터(D28, docs/plan-sunwoori.md). 목록은 scripts/sunwoori-sync.mjs 가 만든 app/data/sunwoori.json.
-// 첫 화면 속도(설계 원칙 ★)를 지키려고 전체 목록은 필요할 때 늦게 받고, 첫 화면 한 줄에 쓰는 '이달의 순우리말'만
-// 작은 파일로 바로 싣는다.
-import latestJson from "../data/sunwoori-latest.json";
+// 첫 화면 속도(설계 원칙 ★)를 지키려고 전체 목록은 필요할 때 늦게 받고, 첫 화면 한 줄에 쓰는 '오늘의 순우리말'
+// 후보(낱말 이름 배열)만 작은 파일로 바로 싣는다.
+import dailyJson from "../data/sunwoori-daily.json";
 
 export interface SunwooriWord {
   w: string; // 낱말
@@ -21,7 +21,20 @@ export interface SunwooriData {
 export const SUNWOORI_PATH = "uri"; // /my 처럼 영문 예약 경로 — 한글(/순우리말)은 낱말 검색 경로(D18)와 겹친다
 export const SUNWOORI_SOURCE_NAME = "충북교육문화원 한글사랑관";
 
-export const latestSunwoori = latestJson as SunwooriWord | null;
+const dailyPool = dailyJson as string[];
+
+// 오늘의 순우리말: 브라우저 날짜(그 기기의 하루)로 고른다. 같은 날 같은 반 학생은 같은 낱말을 보고, 자정에 바뀐다.
+export function todaySunwoori(now = new Date()): string | null {
+  if (dailyPool.length === 0) return null;
+  const day = Math.floor(Date.UTC(now.getFullYear(), now.getMonth(), now.getDate()) / 86_400_000);
+  return dailyPool[day % dailyPool.length];
+}
+
+// 배움터 카드의 '다른 낱말' — 지금 낱말과 다른 것을 아무렇게나 하나.
+export function randomSunwoori(except?: string): string | null {
+  const pool = dailyPool.length > 1 ? dailyPool.filter((w) => w !== except) : dailyPool;
+  return pool.length ? pool[Math.floor(Math.random() * pool.length)] : null;
+}
 
 export function postUrl(no: number): string {
   return `https://www.cbec.go.kr/hangeul/sub.php?menukey=223&mod=view&no=${no}`;
@@ -59,8 +72,6 @@ export function firstSound(word: string): string | null {
   return CHO[Math.floor((code - 0xac00) / 588)];
 }
 
-// 같은 날 올라온 글(옛 글은 5개씩)도 있어 '이달의 순우리말'은 날짜가 아니라 목록 첫 낱말(가장 최근 글)로 한다.
-export function monthLabel(d: string): string {
-  const [y, m] = d.split("-");
-  return `${y}년 ${Number(m)}월`;
+export function todayLabel(now = new Date()): string {
+  return `${now.getMonth() + 1}월 ${now.getDate()}일`;
 }

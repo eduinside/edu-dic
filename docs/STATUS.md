@@ -175,11 +175,11 @@ PLAN.md의 M3(초성 검색 및 실시간 자동완성, 접근성·에러 UX 다
 - **배포 (2026-10-12)**: `release.ps1 -Version 0.6.0 -Bridge -Upload` (커밋 `6bd57b7`). 새 저장소: 팩 3개 + `EduDic-0.6.0-Setup.exe` + `latest.json`, `…/edu-dic/setup` → 302 설치 파일. 옛 저장소: 새 app 팩만 올림(web·runtime 은 0.5.0 것과 같아 이미 있음) + 설치 파일(kit) + `desktop-latest.json` 0.6.0. 운영 주소에서 내려받아 sha256 대조 — 설치 파일(두 주소 같은 파일)·팩 모두 일치. 옛 버킷 정리: 이제 아무도 안 쓰는 0.5.0 app 팩(`15a3fe…`) 지움. 남은 옛 객체(매니페스트·설치 파일·다리 판 팩 3개)는 늦게 켜는 0.5.0·0.4.x·Tauri 가 넘어오는 길이라 0.6.2 뒤 지움
 - 배포 중 AhnLab Safe Transaction 이 PowerShell 행위(`Execution/MDP.Powershell.M1201`)를 막았다는 알림 — `powershell -ExecutionPolicy Bypass -File release.ps1` 로 보이나 확인 안 됨. 릴리스·업로드는 모두 끝까지 됨
 
-## 2026-11-02 — 순우리말 배움터 + 낱말장 (D28, 로컬 커밋까지 · 배포 전)
+## 2026-11-02 — 순우리말 배움터 + 낱말장 (D28, 운영 배포됨)
 
 계획·결정: `docs/plan-sunwoori.md`, PLAN.md D28. 재료는 충북교육문화원 한글사랑관 '순우리말' 게시판(글 429개) — **낱말 이름·글번호·날짜만** 가져오고 소개말·예문은 싣지 않는다(공공누리 표시 없음, 시판 도서 출처).
 
-- 데이터: `scripts/sunwoori-sync.mjs` → `app/data/sunwoori.json`(1,241낱말) + `sunwoori-latest.json`(이달의 순우리말). 제목 쉼표 목록·'A와 B' 제목·묶음 글(47개, "길과 관련된 순 우리말" 등) 본문의 표제어를 모으고, 표준국어대사전에도 없는 135개는 뺌. 품사는 표준대사전(같은 이름이 여럿이면 '동사·형용사'). 달마다 한 번 돌려 커밋
+- 데이터: `scripts/sunwoori-sync.mjs` → `app/data/sunwoori.json`(1,241낱말) + `sunwoori-daily.json`(오늘의 순우리말 후보). 제목 쉼표 목록·'A와 B' 제목·묶음 글(47개, "길과 관련된 순 우리말" 등) 본문의 표제어를 모으고, 표준국어대사전에도 없는 135개는 뺌. 품사는 표준대사전(같은 이름이 여럿이면 '동사·형용사'). 달마다 한 번 돌려 커밋
 - 서버: `functions/lib/stdict.ts`(표준대사전 search/view — JSON 상세는 `type_search=view` 필수) + `functions/lib/sunwoori.ts`. `getOrFetchEntry` 텍스트 순서 krdict → **목록 안 낱말만** 표준대사전 → encykorea. krdict가 멈췄을 때도 목록 안 낱말은 표준대사전으로 보여 주되 캐시하지 않음. 표준대사전 항목은 백과사전 사진을 묻지 않음(네이버+AI 심사는 그대로). 새 비밀값 `STDICT_API_KEY`
 - `/api/share-topic`: 이름·낱말 금칙어 검사(D8), 낱말 100개·이름 30자 상한
 - 화면: `/uri` 순우리말 배움터(`UriPage` — 이달의 순우리말, 목록 안 초성 찾기, 첫 글자·가나다/새로 나온 차례, 48개씩 더 보기, 고르기 → 아래 줄 '낱말장에 담기'). 머리말 '순우리말' 단추, 첫 화면 '추천 낱말' 열 맨 위 '이달의 순우리말' 한 줄(추천 낱말 1개 줄임, 4열 그대로). 결과 화면 '🌱 순우리말' 배지·원문 소개 글 링크·'순우리말 낱말 더 보기', 표준대사전 낱말은 '쉬운 말로'를 먼저 켬(저장된 설정은 그대로), 별표 옆 '낱말장에 담기'
@@ -187,4 +187,6 @@ PLAN.md의 M3(초성 검색 및 실시간 자동완성, 접근성·에러 UX 다
 - 데스크톱: `DictView.SourceName` 에 stdict(다음 릴리스부터). 시험 22개 통과
 - 로컬 확인(wrangler pages dev, krdict 장애 중): 배움터·초성 찾기·고르기 → 낱말장 만들기·넣기(겹침 없음) → 윤슬 결과(표준대사전·배지·쉬운 말)·카드 익히기·인쇄 화면·휴대폰 너비. 공유 금칙어 차단 확인
 - **krdict 장애**: 2026-11-01 밤~11-02 이 PC·운영 모두 krdict 시간 초과(운영 '윤슬' 조회 오류). 그래서 '쉬운 낱말'(기초사전 수록) 걸러 보기는 데이터 `kr`가 모두 null이라 화면에서 숨겨 둠 — krdict가 돌아오면 `node scripts/sunwoori-sync.mjs --recheck` 후 커밋하면 자동으로 나타남
-- **남은 일(운영자)**: Pages 비밀값 `STDICT_API_KEY` 넣기 → main 푸시(배포). 시험 중 만들어진 dgedu.link 단축 주소 `CsC56w`(localhost 가리킴) 정리. 갈래 칩(S5)은 결정대로 보류
+- **배포**: 2026-11-02 main 푸시 → 운영 반영(`index-CyzxGNuz.js`). krdict Open API는 같은 날 낮에 정상으로 돌아옴(고양이·간들거리다 기초사전 응답). 다만 운영 비밀값 목록(production·preview)에 `STDICT_API_KEY`가 없어 표준대사전 대체가 안 됨 — 운영 윤슬 조회가 not_found.
+- **후속(같은 날, 운영자 요청)**: 운영자가 `STDICT_API_KEY` 넣음 → 다음 배포부터 적용. krdict는 운영에선 돌아왔지만 이 PC에서 `sunwoori-sync.mjs --recheck`를 돌리다 500개쯤에서 다시 막힘(웹 페이지까지 시간 초과 — 짧은 시간 수백 번 조회로 IP가 잠시 막힌 것으로 보임). 그래서 기초사전 수록 여부(`kr`·등급)는 `sunwoori-warm.mjs --write-kr`가 운영 응답(krdict 뜻이면 수록)으로 채운다 → '쉬운 낱말' 보기가 나타남. '이달의 순우리말'을 브라우저 날짜 기준 **'오늘의 순우리말'**로 바꿈(후보 `app/data/sunwoori-daily.json` = 기초사전 수록 낱말, 배움터 카드에 '다른 낱말' 단추, `sunwoori-latest.json` 지움). 목록 낱말을 운영 D1에 미리 채우는 `scripts/sunwoori-warm.mjs` 추가(뜻·사진 + 표준대사전 낱말 쉬운 말 + 함께 알면 좋은 낱말, 실패는 `scripts/.sunwoori-warm-failed.tsv`)
+- **남은 일(운영자)**: 시험 중 만들어진 dgedu.link 단축 주소 `CsC56w`(localhost 가리킴) 정리. 갈래 칩(S5)은 결정대로 보류

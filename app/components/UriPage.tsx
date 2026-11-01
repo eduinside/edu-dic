@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { ArrowLeft, Check, ExternalLink, Plus, Search, X } from "lucide-react";
+import { ArrowLeft, Check, ExternalLink, Plus, RefreshCw, Search, X } from "lucide-react";
 import { matchesChoseongOrPrefix } from "../../functions/lib/choseong.ts";
 import { prefetchProps } from "../lib/prefetch.ts";
 import {
@@ -7,8 +7,10 @@ import {
   SUNWOORI_SOURCE_NAME,
   firstSound,
   loadSunwoori,
-  monthLabel,
   postUrl,
+  randomSunwoori,
+  todayLabel,
+  todaySunwoori,
   type SunwooriData,
 } from "../lib/sunwoori.ts";
 
@@ -33,6 +35,7 @@ export default function UriPage({ onSearch, onBack, selected, onToggleSelect, on
   const [easyOnly, setEasyOnly] = useState(false);
   const [sort, setSort] = useState<"new" | "abc">("new");
   const [shown, setShown] = useState(PAGE);
+  const [pick, setPick] = useState<string | null>(null); // '다른 낱말'로 고른 낱말(없으면 오늘의 낱말)
 
   useEffect(() => {
     loadSunwoori().then(setData, () => setFailed(true));
@@ -42,7 +45,8 @@ export default function UriPage({ onSearch, onBack, selected, onToggleSelect, on
 
   // 기초사전 대조를 아직 못 한 목록이면(kr가 전부 null) '쉬운 낱말' 고르기를 숨긴다.
   const canFilterEasy = !!data?.words.some((x) => x.kr !== null);
-  const latest = data?.words[0];
+  const featuredWord = pick ?? todaySunwoori();
+  const latest = featuredWord ? data?.words.find((x) => x.w === featuredWord) : undefined;
 
   const list = useMemo(() => {
     if (!data) return [];
@@ -72,7 +76,7 @@ export default function UriPage({ onSearch, onBack, selected, onToggleSelect, on
       {latest ? (
         <section className="mt-6 flex flex-wrap items-center gap-x-5 gap-y-3 rounded-3xl border border-brand-200 bg-brand-50/60 p-5 sm:p-6">
           <div className="min-w-0 flex-1">
-            <p className="text-sm font-bold text-brand-700">이달의 순우리말 · {monthLabel(latest.d)}</p>
+            <p className="text-sm font-bold text-brand-700">{pick ? "골라 본 순우리말" : `오늘의 순우리말 · ${todayLabel()}`}</p>
             <p className="mt-1 text-3xl font-extrabold text-ink sm:text-4xl">{latest.w}</p>
           </div>
           <div className="flex flex-wrap gap-2">
@@ -92,6 +96,12 @@ export default function UriPage({ onSearch, onBack, selected, onToggleSelect, on
             >
               소개 글 <ExternalLink className="size-3.5" aria-hidden />
             </a>
+            <button
+              onClick={() => setPick(randomSunwoori(latest.w))}
+              className="flex items-center gap-1 rounded-full border border-line bg-white px-4 py-2.5 text-sm font-semibold text-ink-soft hover:bg-paper"
+            >
+              <RefreshCw className="size-3.5" aria-hidden /> 다른 낱말
+            </button>
           </div>
         </section>
       ) : null}

@@ -34,7 +34,7 @@ import {
   SUNWOORI_SOURCE_NAME,
   getSunwooriWord,
   isSunwooriLoaded,
-  latestSunwoori,
+  todaySunwoori,
   loadSunwoori,
   postUrl,
   type SunwooriData,
@@ -865,8 +865,9 @@ function HomeView({
   onGoto: () => void;
   onOpenUri: () => void;
 }) {
-  // '이달의 순우리말' 한 줄이 추천 열 맨 위 자리를 쓰므로 추천 낱말은 하나 줄인다(4열 높이는 그대로, D28).
-  const recommendMax = latestSunwoori ? LANDING_PREVIEW_MAX - 1 : LANDING_PREVIEW_MAX;
+  // '오늘의 순우리말' 한 줄이 추천 열 맨 위 자리를 쓰므로 추천 낱말은 하나 줄인다(4열 높이는 그대로, D28).
+  const todayWord = todaySunwoori();
+  const recommendMax = todayWord ? LANDING_PREVIEW_MAX - 1 : LANDING_PREVIEW_MAX;
   const recommended = useMemo(() => {
     const allPool = Array.from(new Set([...customWordSets, ...WORD_SETS].flatMap((s) => s.words)));
     const shuffled = [...allPool].sort(() => Math.random() - 0.5);
@@ -926,15 +927,15 @@ function HomeView({
             layout="list"
             onGoto={onGoto}
             lead={
-              latestSunwoori ? (
+              todayWord ? (
                 <div className="flex items-stretch bg-brand-50/60">
                   <button
-                    onClick={() => onSearch(latestSunwoori!.w)}
-                    {...prefetchProps(latestSunwoori.w)}
+                    onClick={() => onSearch(todayWord)}
+                    {...prefetchProps(todayWord)}
                     className="min-w-0 flex-1 px-4 py-2 text-left hover:bg-brand-50 transition-colors"
                   >
-                    <span className="block text-xs font-bold text-brand-700">🌱 이달의 순우리말</span>
-                    <span className="block truncate text-base font-semibold text-ink">{latestSunwoori.w}</span>
+                    <span className="block text-xs font-bold text-brand-700">🌱 오늘의 순우리말</span>
+                    <span className="block truncate text-base font-semibold text-ink">{todayWord}</span>
                   </button>
                   <button
                     onClick={onOpenUri}

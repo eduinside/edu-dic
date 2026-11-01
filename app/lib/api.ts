@@ -65,6 +65,19 @@ export function prefetchLookup(word: string): void {
   inflight.set(w, p);
 }
 
+// 낱말장 카드 익히기·인쇄처럼 여러 낱말 뜻을 한꺼번에 볼 때 — 미리 받기(prefetch=1)와 같이 인기 집계에 넣지 않는다.
+// 한 낱말장을 펼칠 때마다 '자주 찾는 낱말'이 낱말장 낱말로 채워지면 안 된다.
+export async function peekLookup(word: string): Promise<LookupResult> {
+  const w = word.trim();
+  const memo = lookupMemo.get(w);
+  if (memo) return memo;
+  const pending = inflight.get(w);
+  if (pending) return pending;
+  const r = await fetchLookup(w, { prefetch: true });
+  if (r.status === "ok") lookupMemo.set(w, r);
+  return r;
+}
+
 // 미리 받아 둔 결과를 실제로 열었을 때 인기 집계에 한 번 넣는다.
 export function noteViewed(word: string, result: LookupResult): void {
   const w = word.trim();

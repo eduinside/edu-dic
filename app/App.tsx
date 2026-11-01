@@ -17,12 +17,28 @@ import {
   Loader2,
   Check,
   Share2,
+  Sprout,
+  Layers,
+  Printer,
 } from "lucide-react";
 import SearchBox from "./components/SearchBox.tsx";
 import WordChips from "./components/WordChips.tsx";
 import ResultCard from "./components/ResultCard.tsx";
 import ResourceLinks from "./components/ResourceLinks.tsx";
 import UsageGuide from "./components/UsageGuide.tsx";
+import UriPage from "./components/UriPage.tsx";
+import WordbookModal from "./components/WordbookModal.tsx";
+import WordbookStudy from "./components/WordbookStudy.tsx";
+import {
+  SUNWOORI_PATH,
+  SUNWOORI_SOURCE_NAME,
+  getSunwooriWord,
+  isSunwooriLoaded,
+  latestSunwoori,
+  loadSunwoori,
+  postUrl,
+  type SunwooriData,
+} from "./lib/sunwoori.ts";
 import {
   createTopicShareLink,
   fetchEasySenses,
@@ -39,6 +55,7 @@ import {
 
 import { relatedWords, WORD_SETS, type WordSet } from "./lib/words.ts";
 import * as store from "./lib/storage.ts";
+import { prefetchProps } from "./lib/prefetch.ts";
 import type { CustomWordSet, DictEntry, DictImage, DictSense, LookupResult, ReadingLevel } from "./types.ts";
 
 function hasPendingImages(entry: DictEntry): boolean {
@@ -69,12 +86,18 @@ function applyPendingImages(
 
 const LANDING_PREVIEW_MAX = 5; // 랜딩 4열 각각 최대 개수(D23)
 
-// 낱말 익히기 기본 노출 주제 4개(랜덤 2개 먼저 노출, 학교생활과 24절기는 아래로)
+// 낱말 익히기 기본 노출 주제(새로 나온 순우리말 → 랜덤 2개 → 학교생활과 24절기)
 function getRandomDefaultTopics(): string[] {
   const fixed = ["school-life", "solar-terms"];
   const others = WORD_SETS.map((s) => s.id).filter((id) => !fixed.includes(id));
   const shuffled = [...others].sort(() => Math.random() - 0.5);
-  return [...shuffled.slice(0, 2), "school-life", "solar-terms"];
+  return [SUNWOORI_TOPIC_ID, ...shuffled.slice(0, 2), "school-life", "solar-terms"];
+}
+
+// 나의 낱말사전 '낱말 익히기'의 순우리말 카드(D28) — 목록에서 가장 최근 글 12낱말.
+const SUNWOORI_TOPIC_ID = "sunwoori-recent";
+function sunwooriTopic(data: SunwooriData): WordSet {
+  return { id: SUNWOORI_TOPIC_ID, title: "새로 나온 순우리말", emoji: "🌱", words: data.words.slice(0, 12).map((x) => x.w) };
 }
 
 
@@ -83,7 +106,11 @@ const MYWORDS_PATH = "my"; // "나의 낱말사전" 전용 URL(D27) — 검색�
 
 // 주소 경로를 해석한다. /my 는 예약 경로(D27), 그 외 비어있지 않은 경로는 검색어(/나비, D18).
 // 과거에 공유된 ?q= 링크도 계속 동작하도록 폴백으로 남겨 둔다.
-type RouteInfo = { kind: "mywords"; tab: MyWordsTab | null } | { kind: "word"; word: string; homograph?: number } | { kind: "home" };
+type RouteInfo =
+  | { kind: "mywords"; tab: MyWordsTab | null }
+  | { kind: "uri" }
+  | { kind: "word"; word: string; homograph?: number }
+  | { kind: "home" };
 function routeFromLocation(): RouteInfo {
   const path = decodeURIComponent(window.location.pathname.replace(/^\/+/, "")).trim();
   const hash = window.location.hash.replace(/^#/, "").trim();
@@ -93,6 +120,7 @@ function routeFromLocation(): RouteInfo {
     const tab = new URLSearchParams(window.location.search).get("tab") as MyWordsTab | null;
     return { kind: "mywords", tab: tab && ["recent", "myPopular", "favorite"].includes(tab) ? tab : null };
   }
+  if (path === SUNWOORI_PATH) return { kind: "uri" };
   if (path) return { kind: "word", word: path, homograph };
   const q = new URLSearchParams(window.location.search).get("q")?.trim();
   if (q) return { kind: "word", word: q, homograph };
@@ -100,7 +128,7 @@ function routeFromLocation(): RouteInfo {
 }
 
 
-type Page = "home" | "mywords";
+type Page = "home" | "mywords" | "uri";
 type MyWordsTab = "recent" | "myPopular" | "favorite";
 
 export default function App() {
@@ -122,6 +150,12 @@ export default function App() {
   const [aiRelated, setAiRelated] = useState<string[]>([]);
   const [communityTopic, setCommunityTopic] = useState<{ title: string; emoji: string; words: string[] } | null>(null);
   const [homoIndex, setHomoIndex] = useState(0);
+  // 순우리말(D28): 표준대사전 뜻은 어른 눈높이라 그 낱말을 볼 때만 "쉬운 말로"를 먼저 켠다(저장된 설정은 그대로).
+  const [levelOverride, setLevelOverride] = useState<ReadingLevel | null>(null);
+  const [sunwoori, setSunwoori] = useState<SunwooriData | null>(null); // 결과 화면 배지·낱말 더 보기용(늦게 받음)
+  const [uriSelected, setUriSelected] = useState<string[]>([]); // 순우리말 배움터에서 고른 낱말(낱말 화면에 다녀와도 유지)
+  const [wordbookWords, setWordbookWords] = useState<string[] | null>(null); // 낱말장에 담기 창(열려 있으면 담을 낱말)
+  const [study, setStudy] = useState<{ set: WordSet; mode: "cards" | "print" } | null>(null);
 
   const [toast, setToast] = useState<string | null>(null);
   const [usageOpen, setUsageOpen] = useState(false);
@@ -181,6 +215,7 @@ export default function App() {
     setAiRelated([]);
     setCommunityTopic(null);
     setHomoIndex(initialHomo);
+    setLevelOverride(null);
 
     if (pushUrl) {
       const hashStr = initialHomo > 0 ? `#${initialHomo + 1}` : "";
@@ -198,6 +233,7 @@ export default function App() {
     setResult(r);
     setLoading(false);
     setLongLoading(false);
+    if (r.status === "ok" && r.entry.source === "stdict") setLevelOverride("easy");
     if (r.status === "ok" && hasPendingImages(r.entry)) loadPendingImages(r.entry.word, seq);
     // 답을 찾은 낱말만 "내가 찾은/자주 찾은"에 남긴다 — 오타·미수록 낱말이 기록에 끼면 안 됨.
     if (r.status === "ok") {
@@ -297,6 +333,47 @@ export default function App() {
     if (pushUrl) window.history.pushState({}, "", "/");
   }, []);
 
+  const openUri = useCallback((pushUrl = true) => {
+    requestSeq.current++;
+    setResult(null);
+    setWord("");
+    setLoading(false);
+    setPage("uri");
+    if (pushUrl) {
+      window.history.pushState({}, "", `/${SUNWOORI_PATH}`);
+      window.scrollTo(0, 0);
+    }
+  }, []);
+
+  // 낱말장(D28) = 나의 낱말사전의 "내가 만든 주제". 새로 만들면 관심 주제 맨 앞에 넣어 바로 보이게 한다.
+  const createWordbook = useCallback(
+    (title: string, emoji: string, words: string[]) => {
+      const newSet: CustomWordSet = { id: `custom_${Date.now()}`, title, emoji, words, createdAt: new Date().toISOString() };
+      setCustomWordSets(store.saveCustomWordSet(newSet));
+      const base = store.getSettings().interestedTopics ?? getRandomDefaultTopics();
+      store.setSettings({ interestedTopics: [newSet.id, ...base.filter((t) => t !== newSet.id)] });
+      setUriSelected((cur) => (cur === words ? [] : cur));
+      setWordbookWords(null);
+      showToast(`'${title}' 낱말장을 만들었어요`);
+    },
+    [showToast],
+  );
+
+  const addToWordbook = useCallback(
+    (id: string, words: string[]) => {
+      const updated = store.addWordsToCustomSet(id, words);
+      setCustomWordSets(updated);
+      setUriSelected((cur) => (cur === words ? [] : cur));
+      setWordbookWords(null);
+      showToast(`'${updated.find((s) => s.id === id)?.title ?? ""}' 낱말장에 넣었어요`);
+    },
+    [showToast],
+  );
+
+  const toggleUriSelect = useCallback((w: string) => {
+    setUriSelected((cur) => (cur.includes(w) ? cur.filter((x) => x !== w) : [...cur, w]));
+  }, []);
+
   const openMyWords = useCallback((tab: MyWordsTab, pushUrl = true) => {
     setMyWordsTab(tab);
     setPage("mywords");
@@ -375,6 +452,7 @@ export default function App() {
     const applyRoute = (r: RouteInfo) => {
       if (r.kind === "word") search(r.word, { pushUrl: false, homograph: r.homograph });
       else if (r.kind === "mywords") openMyWords(r.tab ?? "recent", false);
+      else if (r.kind === "uri") openUri(false);
       else goHome(false);
     };
     applyRoute(routeFromLocation());
@@ -399,10 +477,17 @@ export default function App() {
   }, []);
 
 
+  const effectiveLevel: ReadingLevel = levelOverride ?? level;
+
+  // 결과 화면의 순우리말 배지·낱말 더 보기 — 목록은 처음 낱말을 볼 때 늦게 받는다(첫 화면 속도 영향 없음).
+  useEffect(() => {
+    if (result?.status === "ok" && !sunwoori) loadSunwoori().then(setSunwoori, () => {});
+  }, [result, sunwoori]);
+
   // "쉬운 말로" 토글 + 지금 보고 있는 동음이의어(homoIndex)에 아직 변환본이 없으면 자동으로 가져온다
   // (D17-2, D25 — 동음이의어 탭을 바꿔도 그 탭 전용으로 다시 변환해야 "쉬운 말로"가 항상 맞게 동작한다).
   useEffect(() => {
-    if (level !== "easy" || result?.status !== "ok") return;
+    if (effectiveLevel !== "easy" || result?.status !== "ok") return;
     const entry = result.entry;
     const homographs = entry.homographs && entry.homographs.length > 1 ? entry.homographs : null;
     const already = homographs ? homographs[homoIndex]?.easySenses : entry.easySenses;
@@ -433,7 +518,7 @@ export default function App() {
     return () => {
       cancelled = true;
     };
-  }, [level, result, homoIndex]);
+  }, [effectiveLevel, result, homoIndex]);
 
   // 결과가 뜬 뒤 AI 관련어 및 커스텀 낱말사전 소속 주제를 지연 호출(D17-3).
   useEffect(() => {
@@ -467,12 +552,22 @@ export default function App() {
   }, [showToast]);
 
   const setReadingLevel = useCallback((lv: ReadingLevel) => {
+    setLevelOverride(null);
     setLevel(lv);
     store.setSettings({ level: lv });
   }, []);
 
   const showingResult = result !== null || loading;
   const related = word && result?.status === "ok" ? relatedWords(word, 10, customWordSets) : null;
+  // 지금 낱말이 순우리말 목록에 있으면: 배지 + 원문 소개 글 + 목록에서 이웃한 낱말 10개
+  const sunwooriWord =
+    sunwoori && result?.status === "ok" && isSunwooriLoaded(result.entry.word) ? getSunwooriWord(result.entry.word) : undefined;
+  const sunwooriMore = (() => {
+    if (!sunwoori || !sunwooriWord) return [];
+    const i = sunwoori.words.findIndex((x) => x.w === sunwooriWord.w);
+    const n = sunwoori.words.length;
+    return Array.from({ length: Math.min(10, n - 1) }, (_, k) => sunwoori.words[(i + 1 + k) % n].w);
+  })();
 
   return (
     <div className="min-h-screen">
@@ -486,14 +581,24 @@ export default function App() {
               <span className="text-base">어린이 쉬운 사전</span>
             </button>
             <div className="ml-auto flex shrink-0 flex-nowrap items-center gap-0.5">
-              {showingResult ? <LevelToggle level={level} onChange={setReadingLevel} /> : null}
+              {showingResult ? <LevelToggle level={effectiveLevel} onChange={setReadingLevel} /> : null}
               {!showingResult && page === "home" ? (
-                <button
-                  onClick={() => openMyWords("recent")}
-                  className="flex items-center gap-1.5 rounded-full px-2 py-1.5 text-sm font-semibold text-ink-soft hover:bg-white/60"
-                >
-                  <BookMarked className="size-4" aria-hidden />
-                </button>
+                <>
+                  <button
+                    onClick={() => openUri()}
+                    className="flex items-center gap-1.5 rounded-full px-2 py-1.5 text-sm font-semibold text-ink-soft hover:bg-white/60"
+                    aria-label="순우리말 배움터"
+                  >
+                    <Sprout className="size-4" aria-hidden />
+                  </button>
+                  <button
+                    onClick={() => openMyWords("recent")}
+                    className="flex items-center gap-1.5 rounded-full px-2 py-1.5 text-sm font-semibold text-ink-soft hover:bg-white/60"
+                    aria-label="나의 낱말사전"
+                  >
+                    <BookMarked className="size-4" aria-hidden />
+                  </button>
+                </>
               ) : null}
               {showingResult || page !== "home" ? (
                 <button
@@ -533,20 +638,29 @@ export default function App() {
             {showingResult ? (
               <div className="pointer-events-none absolute inset-x-0 top-1/2 flex -translate-y-1/2 justify-center">
                 <div className="pointer-events-auto">
-                  <LevelToggle level={level} onChange={setReadingLevel} />
+                  <LevelToggle level={effectiveLevel} onChange={setReadingLevel} />
                 </div>
               </div>
             ) : null}
 
             <div className="ml-auto flex shrink-0 flex-nowrap items-center gap-1">
               {!showingResult && page === "home" ? (
-                <button
-                  onClick={() => openMyWords("recent")}
-                  className="flex items-center gap-1.5 rounded-full px-3 py-1.5 text-sm font-semibold text-ink-soft hover:bg-white/60"
-                >
-                  <BookMarked className="size-4" aria-hidden />
-                  나의 낱말사전
-                </button>
+                <>
+                  <button
+                    onClick={() => openUri()}
+                    className="flex items-center gap-1.5 rounded-full px-3 py-1.5 text-sm font-semibold text-ink-soft hover:bg-white/60"
+                  >
+                    <Sprout className="size-4" aria-hidden />
+                    순우리말
+                  </button>
+                  <button
+                    onClick={() => openMyWords("recent")}
+                    className="flex items-center gap-1.5 rounded-full px-3 py-1.5 text-sm font-semibold text-ink-soft hover:bg-white/60"
+                  >
+                    <BookMarked className="size-4" aria-hidden />
+                    나의 낱말사전
+                  </button>
+                </>
               ) : null}
               {showingResult || page !== "home" ? (
                 <button
@@ -603,8 +717,13 @@ export default function App() {
               favorite={!!word && favorites.includes(word)}
               onToggleFavorite={toggleFav}
               big={big}
-              level={level}
+              level={effectiveLevel}
               simplifying={simplifying}
+              badge={sunwooriWord ? "순우리말" : undefined}
+              extraSource={
+                sunwooriWord ? { label: `순우리말 소개: ${SUNWOORI_SOURCE_NAME}`, href: postUrl(sunwooriWord.no) } : undefined
+              }
+              onAddToWordbook={() => word && setWordbookWords([word])}
               onSuggestionPick={search}
               homoIndex={homoIndex}
               onHomoIndexChange={handleHomoIndexChange}
@@ -626,6 +745,13 @@ export default function App() {
               </div>
             ) : null}
 
+            {/* 순우리말 목록 안 낱말이면 목록의 이웃 낱말(D28) */}
+            {sunwooriMore.length > 0 ? (
+              <div className="mt-6">
+                <WordChips title="순우리말 낱말 더 보기" emoji="🌱" words={sunwooriMore} onPick={search} onGoto={() => openUri()} />
+              </div>
+            ) : null}
+
             {/* 3. 뜻/주제 연관 낱말 추천 */}
             {aiRelated.length > 0 ? (
               <div className="mt-6">
@@ -636,6 +762,15 @@ export default function App() {
           </div>
         </main>
 
+      ) : page === "uri" ? (
+        <UriPage
+          onSearch={search}
+          onBack={() => goHome()}
+          selected={uriSelected}
+          onToggleSelect={toggleUriSelect}
+          onClearSelection={() => setUriSelected([])}
+          onOpenWordbook={() => setWordbookWords(uriSelected)}
+        />
       ) : page === "mywords" ? (
         <MyWordsPage
           onSearch={search}
@@ -651,6 +786,8 @@ export default function App() {
           onTabChange={setMyWordsTab}
           onClearRecent={() => setRecent(store.clearRecent())}
           onBack={() => goHome()}
+          onStudy={(set, mode) => setStudy({ set, mode })}
+          onOpenUri={() => openUri()}
         />
       ) : (
         <HomeView
@@ -660,9 +797,26 @@ export default function App() {
           favorites={favorites}
           customWordSets={customWordSets}
           onGoto={() => openMyWords("recent")}
+          onOpenUri={() => openUri()}
         />
 
       )}
+
+      <WordbookModal
+        open={wordbookWords !== null}
+        onClose={() => setWordbookWords(null)}
+        words={wordbookWords ?? []}
+        wordbooks={customWordSets}
+        defaultTitle={page === "uri" ? "나의 순우리말" : ""}
+        onCreate={createWordbook}
+        onAddTo={addToWordbook}
+      />
+      <WordbookStudy
+        set={study?.set ?? null}
+        mode={study?.mode ?? "cards"}
+        onModeChange={(mode) => setStudy((s) => (s ? { ...s, mode } : s))}
+        onClose={() => setStudy(null)}
+      />
     </div>
   );
 }
@@ -701,6 +855,7 @@ function HomeView({
   favorites,
   customWordSets = [],
   onGoto,
+  onOpenUri,
 }: {
   onSearch: (w: string) => void;
   recent: string[];
@@ -708,12 +863,15 @@ function HomeView({
   favorites: string[];
   customWordSets?: CustomWordSet[];
   onGoto: () => void;
+  onOpenUri: () => void;
 }) {
+  // '이달의 순우리말' 한 줄이 추천 열 맨 위 자리를 쓰므로 추천 낱말은 하나 줄인다(4열 높이는 그대로, D28).
+  const recommendMax = latestSunwoori ? LANDING_PREVIEW_MAX - 1 : LANDING_PREVIEW_MAX;
   const recommended = useMemo(() => {
     const allPool = Array.from(new Set([...customWordSets, ...WORD_SETS].flatMap((s) => s.words)));
     const shuffled = [...allPool].sort(() => Math.random() - 0.5);
-    return shuffled.slice(0, LANDING_PREVIEW_MAX);
-  }, [customWordSets]);
+    return shuffled.slice(0, recommendMax);
+  }, [customWordSets, recommendMax]);
 
   return (
     <main className="min-h-[calc(100vh-3.5rem)] flex flex-col justify-between px-4">
@@ -760,7 +918,34 @@ function HomeView({
             max={LANDING_PREVIEW_MAX}
             onGoto={onGoto}
           />
-          <WordChips title="추천 낱말" emoji="🌿" words={recommended} onPick={onSearch} layout="list" onGoto={onGoto} />
+          <WordChips
+            title="추천 낱말"
+            emoji="🌿"
+            words={recommended}
+            onPick={onSearch}
+            layout="list"
+            onGoto={onGoto}
+            lead={
+              latestSunwoori ? (
+                <div className="flex items-stretch bg-brand-50/60">
+                  <button
+                    onClick={() => onSearch(latestSunwoori!.w)}
+                    {...prefetchProps(latestSunwoori.w)}
+                    className="min-w-0 flex-1 px-4 py-2 text-left hover:bg-brand-50 transition-colors"
+                  >
+                    <span className="block text-xs font-bold text-brand-700">🌱 이달의 순우리말</span>
+                    <span className="block truncate text-base font-semibold text-ink">{latestSunwoori.w}</span>
+                  </button>
+                  <button
+                    onClick={onOpenUri}
+                    className="shrink-0 px-3 text-xs font-semibold text-brand-700 hover:bg-brand-50 transition-colors"
+                  >
+                    더 보기
+                  </button>
+                </div>
+              ) : undefined
+            }
+          />
         </div>
       </div>
 
@@ -787,6 +972,8 @@ function MyWordsPage({
   onTabChange,
   onClearRecent,
   onBack,
+  onStudy,
+  onOpenUri,
 }: {
   onSearch: (w: string) => void;
   recent: string[];
@@ -801,15 +988,30 @@ function MyWordsPage({
   onTabChange: (t: MyWordsTab) => void;
   onClearRecent: () => void;
   onBack: () => void;
+  onStudy: (set: WordSet, mode: "cards" | "print") => void;
+  onOpenUri: () => void;
 }) {
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [createOpen, setCreateOpen] = useState(false);
   const [interestedTopics, setInterestedTopics] = useState<string[]>(getRandomDefaultTopics);
+  const [uriTopic, setUriTopic] = useState<WordSet | null>(null);
 
   useEffect(() => {
     const s = store.getSettings();
+    // 순우리말 카드가 생기기 전에 관심 주제를 골라 둔 사람에게도 한 번은 맨 앞에 보여 준다(끄면 다시 안 켬).
+    if (s.interestedTopics && !s.sunwooriIntroduced && !s.interestedTopics.includes(SUNWOORI_TOPIC_ID)) {
+      const next = [SUNWOORI_TOPIC_ID, ...s.interestedTopics];
+      store.setSettings({ interestedTopics: next, sunwooriIntroduced: true });
+      setInterestedTopics(next);
+      return;
+    }
+    if (!s.sunwooriIntroduced) store.setSettings({ sunwooriIntroduced: true });
     setInterestedTopics(s.interestedTopics ?? getRandomDefaultTopics());
   }, [customWordSets]);
+
+  useEffect(() => {
+    loadSunwoori().then((d) => setUriTopic(sunwooriTopic(d)), () => {});
+  }, []);
 
 
 
@@ -840,7 +1042,7 @@ function MyWordsPage({
   };
   const current = listFor[tab];
 
-  const allTopics: WordSet[] = [...customWordSets, ...WORD_SETS];
+  const allTopics: WordSet[] = [...customWordSets, ...(uriTopic ? [uriTopic] : []), ...WORD_SETS];
   const visibleTopics = interestedTopics
     .map((id) => allTopics.find((s) => s.id === id))
     .filter(Boolean) as WordSet[];
@@ -920,6 +1122,8 @@ function MyWordsPage({
                   highlighted={isHighlighted}
                   onShare={customItem ? () => onShareCustomSet(customItem) : undefined}
                   onDelete={customItem ? () => onDeleteCustomSet(set.id) : undefined}
+                  onStudy={(mode) => onStudy(set, mode)}
+                  onMore={set.id === SUNWOORI_TOPIC_ID ? onOpenUri : undefined}
                 />
               );
             })}
@@ -1004,7 +1208,7 @@ function MyWordsPage({
             <div>
               <h3 className="mb-2 text-xs font-bold text-ink-soft">기본 주제</h3>
               <div className="flex flex-wrap gap-2">
-                {WORD_SETS.map((set) => {
+                {[...(uriTopic ? [uriTopic] : []), ...WORD_SETS].map((set) => {
                   const active = interestedTopics.includes(set.id);
                   return (
                     <button
@@ -1263,6 +1467,8 @@ function TopicCard({
   highlighted,
   onShare,
   onDelete,
+  onStudy,
+  onMore,
 }: {
   set: WordSet;
   onPick: (w: string) => void;
@@ -1270,6 +1476,8 @@ function TopicCard({
   highlighted?: boolean;
   onShare?: () => void;
   onDelete?: () => void;
+  onStudy?: (mode: "cards" | "print") => void; // 카드 익히기·인쇄(D28)
+  onMore?: () => void; // 순우리말 카드: 배움터로
 }) {
   const [open, setOpen] = useState(false);
   const preview = set.words.slice(0, 5);
@@ -1346,6 +1554,34 @@ function TopicCard({
           </button>
         ))}
       </div>
+      {onStudy || onMore ? (
+        <div className="mt-3 flex flex-wrap items-center gap-1.5 border-t border-line/60 pt-3">
+          {onStudy ? (
+            <>
+              <button
+                onClick={() => onStudy("cards")}
+                className="flex items-center gap-1 rounded-full px-3 py-1 text-sm font-semibold text-ink-soft hover:bg-paper hover:text-brand-700 transition-colors"
+              >
+                <Layers className="size-4" aria-hidden /> 카드 익히기
+              </button>
+              <button
+                onClick={() => onStudy("print")}
+                className="flex items-center gap-1 rounded-full px-3 py-1 text-sm font-semibold text-ink-soft hover:bg-paper hover:text-brand-700 transition-colors"
+              >
+                <Printer className="size-4" aria-hidden /> 인쇄
+              </button>
+            </>
+          ) : null}
+          {onMore ? (
+            <button
+              onClick={onMore}
+              className="ml-auto flex items-center gap-1 rounded-full px-3 py-1 text-sm font-semibold text-brand-700 hover:bg-brand-50 transition-colors"
+            >
+              <Sprout className="size-4" aria-hidden /> 순우리말 배움터
+            </button>
+          ) : null}
+        </div>
+      ) : null}
     </div>
   );
 }

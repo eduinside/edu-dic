@@ -33,6 +33,7 @@ public class DictViewTests
         Assert.Equal("출처: 국립국어원 한국어기초사전, 네이버 이미지 검색", DictView.SourceLabel(e, new DictImage("u", null, null, "naver")));
         Assert.Equal("출처: 한국민족문화대백과사전", DictView.SourceLabel(e with { Source = "encykorea" }, new DictImage("u", null, null, "encykorea")));
         Assert.Equal("출처: 국립국어원 한국어기초사전", DictView.SourceLabel(e, null));
+        Assert.Equal("출처: 국립국어원 표준국어대사전", DictView.SourceLabel(e with { Source = "stdict" }, null));
     }
 
     [Fact]

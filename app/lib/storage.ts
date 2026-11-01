@@ -100,6 +100,8 @@ export interface Settings {
   // "낱말 익히기" 개인화(D26). wordLevel은 세트에 등급 태그가 붙기 전까진 보관만 하는 예비 설정.
   wordLevel?: "초급" | "중급" | "고급" | "all";
   interestedTopics?: string[]; // WORD_SETS의 id 목록. 없으면(undefined) 전체 관심으로 취급.
+  sunwooriIntroduced?: boolean; // '새로 나온 순우리말' 카드를 이미 관심 주제에 한 번 넣어 줬는지(D28) — 끈 사람에게 다시 켜지 않게
+
 }
 
 export function getSettings(): Settings {
@@ -141,6 +143,15 @@ export function saveCustomWordSet(set: CustomWordSet): CustomWordSet[] {
     /* noop */
   }
   return next;
+}
+
+// 낱말장(D28)에 낱말 더 넣기 — 이미 있는 낱말은 건너뛰고 뒤에 붙인다.
+export function addWordsToCustomSet(id: string, words: string[]): CustomWordSet[] {
+  const cur = getCustomWordSets();
+  const target = cur.find((s) => s.id === id);
+  if (!target) return cur;
+  const merged = [...target.words, ...words.filter((w) => !target.words.includes(w))];
+  return saveCustomWordSet({ ...target, words: merged });
 }
 
 export function deleteCustomWordSet(id: string): CustomWordSet[] {

@@ -1,7 +1,7 @@
 // /api/lookup, /api/simplify, /api/related 가 공유하는 "캐시 우선 조회" 로직.
 //
 // 우선순위(D3/D4/D20/D24):
-//   텍스트: 1) krdict  2) krdict 미수록일 때만 encykorea
+//   텍스트: 1) krdict  2) 순우리말 목록 안 낱말이면 표준국어대사전(D28)  3) krdict 미수록일 때만 encykorea
 //   이미지: 1) krdict  2) encykorea(대표 항목만)  3) 네이버 이미지 검색(카카오 대체)
 // 텍스트와 이미지 폴백은 서로 독립적 — krdict에 뜻은 있는데 이미지만 없는 경우에도 encykorea/네이버를 시도한다.
 // 동음이의어(D22)가 있으면 각 동음이의어마다 독립적으로 이미지를 보완한다(D25):
@@ -20,6 +20,8 @@ import type { Env } from "../_shared.ts";
 import { searchEncykorea } from "./encykorea.ts";
 import { fetchDictEntry } from "./krdict.ts";
 import { searchNaverImage } from "./naver.ts";
+import { fetchStdictEntry } from "./stdict.ts";
+import { isSunwoori } from "./sunwoori.ts";
 import { getBlockedImages } from "./image-block.ts";
 import { getCachedEntry, patchCachedEntry, putCachedEntry } from "./store.ts";
 import { homographImageQuery, imageSearchQuery } from "./textutil.ts";
@@ -36,10 +38,11 @@ async function naverFallback(env: Env, query: string | null, word: string, def?:
 // 대표(단일 또는 0번) 항목 — encykorea·네이버를 순차 대기하지 않고 동시에 조회해 지연을 줄인다
 // (실측: 기초 어휘는 encykorea에 없는 경우가 많아 순차 진행 시 헛되이 한 번 더 왕복이 걸렸다).
 // 텍스트가 이미 encykorea에서 온 항목은 그때 사진도 같이 봤으므로 다시 묻지 않는다.
+// 표준대사전(순우리말) 항목도 묻지 않는다 — 표제어만으로 찾는 백과사전은 같은 이름의 다른 대상이 걸리기 쉽다.
 async function fillPrimaryImage(env: Env, entry: DictEntry): Promise<DictImage | null> {
   const def = entry.senses[0]?.def;
   const [ency, naver] = await Promise.all([
-    env.ENCYKOREA_API_KEY && entry.source !== "encykorea"
+    env.ENCYKOREA_API_KEY && entry.source === "krdict"
       ? searchEncykorea(env.ENCYKOREA_API_KEY, entry.word).catch(() => null)
       : Promise.resolve(null),
     naverFallback(env, imageSearchQuery(entry.word, def), entry.word, def),
@@ -125,7 +128,24 @@ export async function getOrFetchEntry(env: Env, word: string, opts: FetchOpts = 
 
   if (!env.KRDICT_API_KEY) return null;
 
-  let entry = await fetchDictEntry(env.KRDICT_API_KEY, word);
+  const sunwoori = !!env.STDICT_API_KEY && isSunwoori(word);
+  let entry: DictEntry | null;
+  try {
+    entry = await fetchDictEntry(env.KRDICT_API_KEY, word);
+  } catch (e) {
+    // krdict가 멈췄을 때(실측 2026-11-02, 몇 시간 응답 없음) 목록 안 순우리말은 표준대사전으로 보여 주되
+    // 캐시하지 않는다 — 캐시하면 krdict가 돌아와도 그 낱말은 계속 표준대사전 뜻으로 남는다.
+    if (!sunwoori) throw e;
+    const fallback = await fetchStdictEntry(env.STDICT_API_KEY!, word).catch(() => null);
+    if (!fallback) throw e;
+    return fallback;
+  }
+
+  if (!entry && sunwoori) {
+    // 순우리말 목록 안 낱말만 표준국어대사전으로(D28). 백과사전보다 먼저 — 순우리말은 백과사전 표제어와
+    // 우연히 같은 이름의 다른 대상(지명·작품명 등)이 걸리기 쉽다.
+    entry = await fetchStdictEntry(env.STDICT_API_KEY!, word).catch(() => null);
+  }
 
   if (!entry && env.ENCYKOREA_API_KEY) {
     // krdict 미수록 → encykorea 텍스트로 항목 자체를 구성(D20). 표제어 정확 일치만 신뢰.

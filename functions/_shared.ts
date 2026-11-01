@@ -2,6 +2,7 @@
 export interface Env {
   DB: D1Database; // 공유 edu-link-db (테이블은 edudic_ 접두어)
   KRDICT_API_KEY?: string; // krdict 인증키 — .dev.vars(로컬) / CF Secret(운영)
+  STDICT_API_KEY?: string; // 표준국어대사전 — 순우리말 목록 안 낱말이 krdict에 없을 때만 뜻풀이 폴백(D28). 없으면 생략.
   ENCYKOREA_API_KEY?: string; // 한국민족문화대백과사전 — krdict 미수록 텍스트 또는 이미지 보완(D20). 없으면 생략.
   "X-NCP-APIGW-API-KEY-ID"?: string;
   "X-NCP-APIGW-API-KEY"?: string;

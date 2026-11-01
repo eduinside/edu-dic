@@ -72,6 +72,15 @@ body { word-break: keep-all; overflow-wrap: break-word; }
 .word-chip:hover { border-color: var(--color-brand-300); background: var(--color-brand-50); transform: translateY(-1px); }
 .word-chip:focus-visible { outline: 2px solid var(--color-brand-500); outline-offset: 2px; }
 
+/* 낱말장 인쇄(D28) — 낱말장 화면(body 바로 아래 portal)만 종이에 찍고, 뒤의 앱 화면·단추는 감춘다. */
+@media print {
+  body.wordbook-open { background: #fff; }
+  body.wordbook-open > :not(.wordbook-portal) { display: none !important; }
+  .wordbook-portal { position: static !important; overflow: visible !important; }
+  .no-print { display: none !important; }
+  .print-area tr { break-inside: avoid; }
+}
+
 /* Scrollbar */
 .dic-scroll::-webkit-scrollbar { width: 8px; height: 8px; }
 .dic-scroll::-webkit-scrollbar-track { background: transparent; }

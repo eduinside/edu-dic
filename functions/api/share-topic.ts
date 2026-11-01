@@ -1,4 +1,7 @@
 import { json, type Env } from "../_shared.ts";
+import { isBlocked } from "../lib/blocklist.ts";
+
+const MAX_WORDS = 100; // 낱말장 한 개 상한 — 공유 행·주소 길이를 적당히 묶어 둔다
 
 interface ShareTopicPayload {
   title: string;
@@ -64,9 +67,19 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
     return json({ status: "error", message: "잘못된 요청 형식입니다." }, { status: 400 });
   }
 
-  const { title, emoji = "💡", words = [] } = body;
-  if (!title || !Array.isArray(words) || words.length === 0) {
+  const title = typeof body.title === "string" ? body.title.trim().slice(0, 30) : "";
+  const emoji = typeof body.emoji === "string" && body.emoji ? body.emoji.slice(0, 8) : "💡";
+  const words = Array.isArray(body.words)
+    ? [...new Set(body.words.filter((w): w is string => typeof w === "string").map((w) => w.trim()).filter(Boolean))]
+        .filter((w) => w.length <= 20)
+        .slice(0, MAX_WORDS)
+    : [];
+  if (!title || words.length === 0) {
     return json({ status: "error", message: "주제명과 낱말 목록이 필요합니다." }, { status: 400 });
+  }
+  // 학생이 직접 이름을 짓는 낱말장(D28)도 이 길로 공유되므로 이름·낱말 모두 금칙어 필터(D8)를 거친다.
+  if (isBlocked(title) || words.some(isBlocked)) {
+    return json({ status: "blocked", message: "쓸 수 없는 말이 들어 있어요." }, { status: 400 });
   }
 
   const origin = new URL(request.url).origin;

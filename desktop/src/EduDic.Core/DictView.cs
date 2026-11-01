@@ -28,6 +28,7 @@ public static class DictView
     static string SourceName(string? source) => source switch
     {
         "encykorea" => "한국민족문화대백과사전",
+        "stdict" => "국립국어원 표준국어대사전",
         "naver" => "네이버 이미지 검색",
         _ => "국립국어원 한국어기초사전",
     };
@@ -35,7 +36,7 @@ public static class DictView
     /// <summary>"출처: 사전[, 사진 출처]" — 같으면 한 번만</summary>
     public static string SourceLabel(DictEntry e, DictImage? image)
     {
-        var dict = SourceName(e.Source == "encykorea" ? "encykorea" : "krdict");
+        var dict = SourceName(e.Source is "encykorea" or "stdict" ? e.Source : "krdict");
         if (image != null)
         {
             var img = SourceName(image.Source);

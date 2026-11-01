@@ -5,6 +5,10 @@
 # 국립국어원 한국어기초사전(krdict) 오픈 API 인증키 (32자리 hex)
 KRDICT_API_KEY=
 
+# 국립국어원 표준국어대사전(stdict) 오픈 API 인증키 (32자리 hex) — 순우리말 목록(app/data/sunwoori.json) 안 낱말이
+# krdict에 없을 때만 쓰는 뜻풀이 폴백(D28). 선택값: 없으면 그 낱말은 지금처럼 "준비 중".
+STDICT_API_KEY=
+
 # 한국민족문화대백과사전(한국학중앙연구원) API 키 — krdict 미수록 텍스트/이미지 보완(D20). 선택값.
 ENCYKOREA_API_KEY=
 

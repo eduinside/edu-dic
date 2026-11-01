@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Star, Loader2, Volume2, RefreshCw, EyeOff } from "lucide-react";
+import { Star, Loader2, Volume2, RefreshCw, EyeOff, BookPlus, ExternalLink } from "lucide-react";
 import type { DictAudio, DictHomograph, DictImage, DictSense, LookupResult } from "../types.ts";
 
 interface Props {
@@ -17,7 +17,16 @@ interface Props {
   onHomoIndexChange: (i: number) => void;
   onImageAction?: (action: "next" | "hide", currentUrl: string) => Promise<void>;
   onRefresh?: () => void;
+  badge?: string; // 낱말 옆 작은 표시(순우리말 목록 안 낱말이면 "순우리말", D28)
+  extraSource?: { label: string; href: string }; // 출처 줄 끝에 붙는 원문 링크(순우리말 소개 글)
+  onAddToWordbook?: () => void; // 별표 옆 '낱말장에 담기'
 }
+
+const SOURCE_LABEL: Record<string, string> = {
+  krdict: "출처: 국립국어원 한국어기초사전",
+  stdict: "출처: 국립국어원 표준국어대사전",
+  encykorea: "출처: 한국민족문화대백과사전",
+};
 
 // 검색 결과: 대형 낱말 + 대표 뜻 + 이미지 1장. 낱말·뜻·이미지가 "한 번에" 보이도록 자리를 미리 잡는다.
 // 큰 화면(발표) 모드에서는 일반 모니터 기준 화면 높이의 약 70%를 차지하도록 키운다.
@@ -35,6 +44,9 @@ export default function ResultCard({
   onHomoIndexChange,
   onImageAction,
   onRefresh,
+  badge,
+  extraSource,
+  onAddToWordbook,
 }: Props) {
 
 
@@ -119,6 +131,8 @@ export default function ResultCard({
             big={big}
             favorite={favorite}
             onToggleFavorite={onToggleFavorite}
+            badge={badge}
+            onAddToWordbook={onAddToWordbook}
           />
 
           {homographs.length > 1 ? (
@@ -151,7 +165,18 @@ export default function ResultCard({
           ) : null}
 
           <div className="mt-4 flex flex-wrap items-center justify-between gap-2 text-xs text-ink-faint">
-            <p>{entry.source === "encykorea" ? "출처: 한국민족문화대백과사전" : "출처: 국립국어원 한국어기초사전"}</p>
+            <p>
+              {SOURCE_LABEL[entry.source] ?? SOURCE_LABEL.krdict}
+              {extraSource ? (
+                <>
+                  {" · "}
+                  <a href={extraSource.href} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-0.5 underline hover:text-ink-soft">
+                    {extraSource.label}
+                    <ExternalLink className="size-3" aria-hidden />
+                  </a>
+                </>
+              ) : null}
+            </p>
             {onRefresh ? (
               <button
                 type="button"
@@ -281,6 +306,8 @@ function WordHeader({
   favorite,
   onToggleFavorite,
   showFavorite = true,
+  badge,
+  onAddToWordbook,
 }: {
   word: string;
   reading?: string;
@@ -291,6 +318,8 @@ function WordHeader({
   favorite: boolean;
   onToggleFavorite: () => void;
   showFavorite?: boolean;
+  badge?: string;
+  onAddToWordbook?: () => void;
 }) {
   return (
     <div className="flex items-start gap-3">
@@ -305,14 +334,29 @@ function WordHeader({
           {reading ? <span className="text-lg">[{reading}]</span> : null}
           {pos ? <span className="rounded-full bg-paper px-2.5 py-0.5 text-sm font-semibold">{pos}</span> : null}
           {level ? <span className="rounded-full bg-brand-50 px-2.5 py-0.5 text-sm font-semibold text-brand-700">{level}</span> : null}
+          {badge ? (
+            <span className="rounded-full border border-success-500/40 bg-success-50 px-2.5 py-0.5 text-sm font-semibold text-success-600">
+              🌱 {badge}
+            </span>
+          ) : null}
         </div>
       </div>
+      {showFavorite && onAddToWordbook ? (
+        <button
+          onClick={onAddToWordbook}
+          aria-label="낱말장에 담기"
+          title="낱말장에 담기"
+          className="ml-auto shrink-0 rounded-full p-2 text-ink-faint hover:bg-paper hover:text-brand-700 transition-colors"
+        >
+          <BookPlus className="size-8" aria-hidden />
+        </button>
+      ) : null}
       {showFavorite ? (
         <button
           onClick={onToggleFavorite}
           aria-pressed={favorite}
           aria-label={favorite ? "즐겨찾기 해제" : "즐겨찾기 추가"}
-          className="ml-auto shrink-0 rounded-full p-2 hover:bg-paper transition-colors"
+          className={`${onAddToWordbook ? "" : "ml-auto "}shrink-0 rounded-full p-2 hover:bg-paper transition-colors`}
         >
           <Star className={favorite ? "size-8 fill-warning-500 text-warning-500" : "size-8 text-ink-faint"} aria-hidden />
         </button>

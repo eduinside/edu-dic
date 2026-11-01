@@ -1,4 +1,4 @@
-import { X, Search, Sparkles, EyeOff, Star, Monitor, Maximize2, Download } from "lucide-react";
+import { X, Search, Sparkles, EyeOff, Star, Monitor, Maximize2, Download, Sprout } from "lucide-react";
 import Modal from "./Modal.tsx";
 
 // PC 앱 설치 파일 — 고정 주소(0.6.0~, R2 byeduin-media apps/edu-dic/ · 공용 모듈 DesktopKit, docs/plan-desktop-kit.md).
@@ -27,13 +27,18 @@ const STEPS: { icon: typeof Search; title: string; body: string }[] = [
     body: "별표(★)로 낱말을 모으고, '나의 낱말사전'에서 주제별로 익혀요.",
   },
   {
+    icon: Sprout,
+    title: "5. 순우리말 배움터 & 낱말장",
+    body: "'순우리말'에서 고운 우리말을 찾아보고, 고른 낱말을 낱말장으로 묶어 카드로 익히거나 인쇄할 수 있어요.",
+  },
+  {
     icon: Maximize2,
-    title: "5. 발표용 큰 화면",
+    title: "6. 발표용 큰 화면",
     body: "'큰 화면' 버튼을 누르면 교실 TV나 전자칠판에 낱말과 그림이 시원하게 커져요.",
   },
   {
     icon: Monitor,
-    title: "6. PC 단축키 앱",
+    title: "7. PC 단축키 앱",
     body: "단축키(Ctrl+Alt+D)로 화면 위에 즉시 사전을 띄우는 데스크탑 앱을 제공해요.",
   },
 ];

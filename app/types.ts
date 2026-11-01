@@ -40,7 +40,8 @@ export interface DictEntry {
   easySenses?: DictSense[] | null; // AI 변환: 사전 뜻풀이를 그대로(스켈레톤) 쉬운 말로만 다시 쓴 것. 캐시됨.
   related?: string[] | null; // AI 제안 관련어 — krdict에 실제 있는 낱말만 검증 후 저장. 캐시됨.
   imagePending?: boolean; // 대표(단일 뜻) 사진 보완 대기 — homographs가 있으면 각 항목의 imagePending을 본다.
-  source: "krdict" | "encykorea"; // krdict 미수록일 때만 encykorea 텍스트로 대체(D20). 화면에 출처를 다르게 표시.
+  // krdict 미수록일 때만 대체(D20). stdict=표준국어대사전, 순우리말 목록 안 낱말 한정(D28). 화면에 출처를 다르게 표시.
+  source: "krdict" | "stdict" | "encykorea";
   fetchedAt: string;
 }
 

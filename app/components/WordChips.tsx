@@ -1,3 +1,4 @@
+import type { ReactNode } from "react";
 import { ChevronRight } from "lucide-react";
 import { prefetchProps } from "../lib/prefetch.ts";
 
@@ -11,10 +12,11 @@ interface Props {
   layout?: "wrap" | "list"; // list = 세로 목록(줄마다 낱말 1개), wrap = 여러 줄로 자동 줄바꿈되는 칩
   max?: number; // 넘는 개수는 자르고(잘렸다는 티는 안 냄)
   onGoto?: () => void; // 있으면 제목 옆에 ">" 아이콘 — "나의 낱말사전"으로 이동(탭 구분 없음)
+  lead?: ReactNode; // list 형태에서 맨 윗줄에 끼우는 줄(추천 열의 '이달의 순우리말', D28)
 }
 
 // 낱말 섹션(내가 찾은 / 즐겨찾기한 / 자주 찾는 / 추천). 항목을 누르면 바로 그 낱말로 검색.
-export default function WordChips({ title, emoji, words, onPick, emptyText, onClear, layout = "wrap", max, onGoto }: Props) {
+export default function WordChips({ title, emoji, words, onPick, emptyText, onClear, layout = "wrap", max, onGoto, lead }: Props) {
   const shown = max ? words.slice(0, max) : words;
   return (
     <section className="w-full">
@@ -37,10 +39,11 @@ export default function WordChips({ title, emoji, words, onPick, emptyText, onCl
           ) : null}
         </div>
       ) : null}
-      {shown.length === 0 ? (
+      {shown.length === 0 && !lead ? (
         <p className="text-sm text-ink-faint">{emptyText ?? "아직 없어요."}</p>
       ) : layout === "list" ? (
         <div className="divide-y divide-line overflow-hidden rounded-2xl border border-line bg-white">
+          {lead}
           {shown.map((w) => (
             <button
               key={w}

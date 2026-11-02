@@ -5,6 +5,7 @@
 //
 // 낱말마다 확인하는 것:
 //   - 표준국어대사전 수록 여부·품사 → 없으면 목록에서 뺀다(뜻을 보여 줄 수 없음)
+//   - 표준국어대사전 어종 → 고유어가 아니면(한자어·혼종어·외래어) 뺀다. 예외는 KEEP/DROP
 //   - 한국어기초사전 수록 여부·어휘 등급 → '쉬운 낱말' 보기에 쓴다. krdict가 안 되면 null(확인 못 함)로 둔다.
 // 이미 있는 app/data/sunwoori.json 값을 다시 쓰고 새 낱말만 확인한다. --recheck 면 전부 다시 확인.
 //
@@ -132,6 +133,32 @@ async function checkStdict(word, key) {
   return null;
 }
 
+// 2-c) 어종 — 표준대사전 고급 검색(type2)으로 고유어 → 혼종어 → 한자어 → 외래어 차례로 묻는다. 같은 이름이
+// 여럿이면 하나라도 고유어면 고유어. 게시판에 '요일'(曜日)·'터줏대감'(터主大監) 같은 말이 섞여 있어 고유어만 남긴다
+// (2026-11-02 운영자 결정 — 혼종어도 뺀다). 표준대사전에 없으면 null, 확인을 못 하면 undefined.
+const WORD_TYPES = ["native", "hybrid", "chinese", "loanword"];
+async function checkWordType(word, key) {
+  if (!key) return undefined;
+  for (const t of WORD_TYPES) {
+    const raw = await get(
+      `https://stdict.korean.go.kr/api/search.do?key=${key}&q=${encodeURIComponent(word)}&req_type=json&num=20&advanced=y&method=exact&type2=${t}`,
+    );
+    if (raw === null) return undefined;
+    try {
+      const items = [].concat((raw.trim() ? JSON.parse(raw) : {})?.channel?.item ?? []);
+      if (items.some((it) => norm(String(it.word)) === word)) return t;
+    } catch {
+      return undefined;
+    }
+    await sleep(80);
+  }
+  return null;
+}
+
+// 사전 어종과 사람의 판단이 다를 때. '가람'(강의 옛말)은 표준대사전에 伽藍만 있어 한자어로 나온다.
+const KEEP = new Set(["가람"]);
+const DROP = new Set([]);
+
 // 2-b) 한국어기초사전 — 표제어 정확 일치 + 어휘 등급. 안 되면 undefined(확인 못 함).
 async function checkKrdict(word, key) {
   const xml = await get(
@@ -173,6 +200,8 @@ async function main() {
   })();
   const prevBy = new Map(prev.words.map((x) => [x.w, x]));
   const prevMissing = new Set(prev.missing ?? []);
+  const prevNonNative = new Map((prev.nonNative ?? []).map((x) => [x.w, x.t]));
+  const typeChecked = prev.typeChecked === true; // 어종 확인 전(2026-11-02 이전) 데이터면 모두 확인
 
   console.log("게시판 목록 읽는 중…");
   const posts = await readBoard();
@@ -203,8 +232,11 @@ async function main() {
 
   const out = [];
   const missing = [];
+  const nonNative = [];
   let done = 0;
   await pool(words, 4, async (x) => {
+    if (DROP.has(x.w)) return void nonNative.push({ w: x.w, t: "manual" });
+    if (!RECHECK && prevNonNative.has(x.w) && !KEEP.has(x.w)) return void nonNative.push({ w: x.w, t: prevNonNative.get(x.w) });
     const old = prevBy.get(x.w);
     let pos = old?.pos ?? null;
     let inStd = old ? true : prevMissing.has(x.w) ? false : undefined;
@@ -226,18 +258,26 @@ async function main() {
     }
     // 표준대사전에도 기초사전에도 없다고 확인된 낱말만 뺀다. 확인을 못 했으면(undefined) 일단 넣는다.
     if (inStd === false && kr !== true) missing.push(x.w);
-    else out.push({ ...x, pos, kr, g });
+    else {
+      // 고유어가 아니라고 확인된 낱말만 뺀다(표준대사전에 없거나 확인을 못 하면 넣는다).
+      const t = KEEP.has(x.w) || (old && typeChecked && !RECHECK) ? "native" : await checkWordType(x.w, vars.STDICT_API_KEY);
+      if (t && t !== "native") nonNative.push({ w: x.w, t });
+      else out.push({ ...x, pos, kr, g });
+    }
     if (++done % 50 === 0) console.log(`  ${done}/${words.length}`);
     await sleep(100);
   });
 
   out.sort((a, b) => (a.d === b.d ? b.no - a.no : a.d < b.d ? 1 : -1));
   missing.sort((a, b) => a.localeCompare(b, "ko"));
+  nonNative.sort((a, b) => a.w.localeCompare(b.w, "ko"));
   const data = {
     source: { name: "충청북도교육문화원 한글사랑관 순우리말", url: LIST_URL },
     updated: new Date().toLocaleDateString("sv-SE", { timeZone: "Asia/Seoul" }),
+    typeChecked: !!vars.STDICT_API_KEY,
     words: out,
     missing, // 국어원 사전 두 곳 모두에 없어 뺀 낱말(다음 실행 때 다시 묻지 않으려고 남김)
+    nonNative, // 고유어가 아니라 뺀 낱말 { w, t: hybrid|chinese|loanword|manual }
   };
   fs.mkdirSync(path.dirname(OUT), { recursive: true });
   fs.writeFileSync(OUT, JSON.stringify(data, null, 0).replace(/\},\{/g, "},\n{") + "\n");
@@ -246,7 +286,7 @@ async function main() {
   fs.writeFileSync(OUT_DAILY, JSON.stringify(daily) + "\n");
   const krKnown = out.filter((x) => x.kr !== null).length;
   console.log(
-    `완료: ${out.length}개 저장, ${missing.length}개 뺌, 기초사전 수록 ${out.filter((x) => x.kr).length}개(확인 ${krKnown}개)`,
+    `완료: ${out.length}개 저장, 사전에 없어 ${missing.length}개·고유어가 아니라 ${nonNative.length}개 뺌, 기초사전 수록 ${out.filter((x) => x.kr).length}개(확인 ${krKnown}개)`,
   );
 }
 

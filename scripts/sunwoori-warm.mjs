@@ -86,10 +86,12 @@ async function worker() {
 console.log(`${BASE} 에 ${words.length}개 채우기${NO_AI ? " (AI 없이)" : ""}`);
 await Promise.all(Array.from({ length: WORKERS }, worker));
 console.log(`완료 ${((Date.now() - started) / 60000).toFixed(1)}분: ${JSON.stringify(count)}`);
+const failedOut = path.join(ROOT, "scripts/.sunwoori-warm-failed.tsv");
 if (failed.length) {
-  const out = path.join(ROOT, "scripts/.sunwoori-warm-failed.tsv");
-  fs.writeFileSync(out, failed.join("\n") + "\n");
-  console.log(`못 채운 낱말 ${failed.length}개 → ${path.relative(ROOT, out)}`);
+  fs.writeFileSync(failedOut, failed.join("\n") + "\n");
+  console.log(`못 채운 낱말 ${failed.length}개 → ${path.relative(ROOT, failedOut)}`);
+} else {
+  fs.rmSync(failedOut, { force: true }); // 지난번 실패 목록이 남아 헷갈리지 않게
 }
 
 // sunwoori-sync.mjs 와 같은 섞는 차례(FNV-1a) — 두 스크립트가 만든 후보 파일이 같게.
